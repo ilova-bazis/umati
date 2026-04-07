@@ -1,0 +1,13 @@
+{
+  "id": "UM-3",
+  "title": "Grandchild task",
+  "description": "Nested child task.",
+  "priority": "medium",
+  "status": "draft",
+  "assignee": null,
+  "parent_id": "UM-2",
+  "created_at": "2026-04-03T12:00:00Z",
+  "updated_at": "2026-04-03T12:00:00Z",
+  "created_by": "human",
+  "updated_by": "human"
+}

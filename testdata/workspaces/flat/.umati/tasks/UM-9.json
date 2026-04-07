@@ -1,0 +1,13 @@
+{
+  "id": "UM-9",
+  "title": "Ninth task",
+  "description": "A valid draft task.",
+  "priority": "low",
+  "status": "draft",
+  "assignee": null,
+  "parent_id": null,
+  "created_at": "2026-04-03T12:00:00Z",
+  "updated_at": "2026-04-03T12:00:00Z",
+  "created_by": "human",
+  "updated_by": "human"
+}

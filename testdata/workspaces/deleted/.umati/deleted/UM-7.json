@@ -1,0 +1,15 @@
+{
+  "id": "UM-7",
+  "title": "Archived task",
+  "description": "Archived and hidden from active lookup.",
+  "priority": "low",
+  "status": "deleted",
+  "assignee": null,
+  "parent_id": null,
+  "created_at": "2026-04-03T12:00:00Z",
+  "updated_at": "2026-04-03T13:00:00Z",
+  "created_by": "human",
+  "updated_by": "human",
+  "deleted_at": "2026-04-03T13:00:00Z",
+  "deleted_by": "human"
+}

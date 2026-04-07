@@ -1,0 +1,13 @@
+{
+  "id": "UM-2",
+  "title": "Second task",
+  "description": "A valid ready task.",
+  "priority": "medium",
+  "status": "ready",
+  "assignee": null,
+  "parent_id": null,
+  "created_at": "2026-04-03T12:00:00Z",
+  "updated_at": "2026-04-03T12:00:00Z",
+  "created_by": "human",
+  "updated_by": "human"
+}
