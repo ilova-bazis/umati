@@ -17,6 +17,12 @@ import (
 
 // Run is the root CLI entrypoint.
 func Run(args []string) error {
+	// Handle version flags before command dispatch
+	if len(args) > 0 && (args[0] == "-v" || args[0] == "--version") {
+		fmt.Println("umati version", Version)
+		return nil
+	}
+
 	if len(args) == 0 {
 		printUsage()
 		return nil
@@ -60,6 +66,9 @@ func Run(args []string) error {
 
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: umati <command> [args]")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Options:")
+	fmt.Fprintln(os.Stderr, "  -v, --version          Show version information")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  init [directory]                   Initialize a new workspace")
