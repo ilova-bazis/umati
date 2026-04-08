@@ -48,6 +48,8 @@ func Run(args []string) error {
 		return runSearch(args[1:])
 	case "update":
 		return runUpdate(args[1:])
+	case "board":
+		return runBoard(args[1:])
 	case "help", "--help", "-h":
 		printUsage()
 		return nil
@@ -74,6 +76,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  release <task-id> --agent <agent>  Release a claimed task")
 	fmt.Fprintln(os.Stderr, "  complete <task-id> --agent <agent> Complete an in-progress task")
 	fmt.Fprintln(os.Stderr, "  delete <task-id> --agent <agent>   Delete a task")
+	fmt.Fprintln(os.Stderr, "  board --agent <agent>              Open the interactive kanban board")
 	fmt.Fprintln(os.Stderr, "  help                               Show this help message")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "List filtering (works with all, ready, mine):")
