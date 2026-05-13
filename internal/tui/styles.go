@@ -8,12 +8,11 @@ import (
 // System terminal colors (ANSI 0-15) - adapts to user's terminal theme
 const (
 	// Base colors
-	colorBg         = lipgloss.Color("0") // black (terminal background)
-	colorBorder     = lipgloss.Color("8") // bright black
-	colorSelected   = lipgloss.Color("4") // blue
-	colorCursor     = lipgloss.Color("4") // blue
-	colorText       = lipgloss.Color("7") // white (terminal foreground)
-	colorDim        = lipgloss.Color("8") // bright black
+	colorBg      = lipgloss.Color("0") // black (terminal background)
+	colorBorder  = lipgloss.Color("8") // bright black
+	colorSelected = lipgloss.Color("4") // blue — used as foreground for borders/headers
+	colorText    = lipgloss.Color("7") // white (terminal foreground)
+	colorDim     = lipgloss.Color("8") // bright black
 	colorSuccess    = lipgloss.Color("2") // green
 	colorErr        = lipgloss.Color("1") // red
 	colorHeader     = lipgloss.Color("6") // cyan
@@ -21,6 +20,11 @@ const (
 	colorInputFg    = lipgloss.Color("7") // white
 	colorInputBg    = lipgloss.Color("0") // black
 	colorInputFocus = lipgloss.Color("6") // cyan
+
+	// Nav bar colors
+	colorNavKey    = lipgloss.Color("15") // bright white — key buttons (?, q, ↑↓, enter…)
+	colorNavLabel  = lipgloss.Color("6")  // cyan — description labels (nav, col, expand…)
+	colorColHeader = lipgloss.Color("5")  // magenta — column headers
 
 	// Priority colors
 	colorPrioLow    = lipgloss.Color("2") // green
@@ -39,78 +43,79 @@ const (
 )
 
 var (
+	// Status bar across the top of the board.
 	styleHeader = lipgloss.NewStyle().
-			Background(colorHeaderBg).
-			Foreground(colorText).
+			Reverse(true).
 			Padding(0, 1)
 
+	// Inactive column header — magenta.
 	styleColHeader = lipgloss.NewStyle().
-			Foreground(colorHeader).
-			Bold(true)
+			Foreground(colorColHeader)
 
+	// Active column header — bold magenta.
 	styleColHeaderActive = lipgloss.NewStyle().
-				Foreground(colorSelected).
+				Foreground(colorColHeader).
 				Bold(true)
 
 	styleColSep = lipgloss.NewStyle().
-			Foreground(colorBorder)
+			Foreground(colorDim)
 
-	styleCardNormal = lipgloss.NewStyle().
-			Foreground(colorText)
+	styleCardNormal = lipgloss.NewStyle()
 
-	styleCardSelected = lipgloss.NewStyle().
-				Background(colorCursor).
-				Foreground(colorText)
+	// Card selection uses reverse-video so contrast is always guaranteed.
+	styleCardSelected = lipgloss.NewStyle().Reverse(true)
 
-	styleCardID = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(colorText)
+	styleCardID = lipgloss.NewStyle().Bold(true)
 
 	styleCardIDSelected = lipgloss.NewStyle().
 				Bold(true).
-				Background(colorCursor).
-				Foreground(colorText)
+				Reverse(true)
 
 	styleCardDim = lipgloss.NewStyle().
 			Foreground(colorDim)
 
-	styleCardDimSelected = lipgloss.NewStyle().
-				Background(colorCursor).
-				Foreground(colorDim)
+	styleCardDimSelected = lipgloss.NewStyle().Reverse(true)
 
+	// Status/error messages in the board footer.
 	styleStatusBar = lipgloss.NewStyle().
-			Background(colorHeaderBg).
-			Foreground(colorDim).
-			Padding(0, 1)
-
-	styleStatusMsg = lipgloss.NewStyle().
-			Background(colorHeaderBg).
-			Foreground(colorSuccess)
-
-	styleStatusErr = lipgloss.NewStyle().
-			Background(colorHeaderBg).
-			Foreground(colorErr)
-
-	styleDetailPanel = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(colorSelected).
-				Padding(0, 1)
-
-	styleOverlay = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorSelected).
-			Background(colorBg).
-			Padding(1, 2)
-
-	styleLabelFg = lipgloss.NewStyle().
 			Foreground(colorDim)
 
-	styleValueFg = lipgloss.NewStyle().
-			Foreground(colorText)
+	styleStatusMsg = lipgloss.NewStyle().Foreground(colorSuccess)
 
-	styleFocusedLabel = lipgloss.NewStyle().
-				Foreground(colorSelected).
-				Bold(true)
+	styleStatusErr = lipgloss.NewStyle().Foreground(colorErr)
+
+	// Detail panel — dim border keeps it from competing with card content.
+	styleDetailPanel = lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(colorDim).
+				Padding(0, 1)
+
+	// Overlay (form, filter, help) — bright border makes it clearly float above the board.
+	styleOverlay = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorText).
+			Padding(1, 2)
+
+	// Form field labels.
+	styleLabelFg = lipgloss.NewStyle().Foreground(colorColHeader)
+
+	styleValueFg = lipgloss.NewStyle()
+
+	// Focused label: bold only — no color, works in any theme.
+	styleFocusedLabel = lipgloss.NewStyle().Bold(true)
+
+	// Action hint key bracket e.g. "[e]" — bold to pop against the dim description.
+	styleActionKey = lipgloss.NewStyle().Bold(true)
+
+	// Nav bar — key buttons and label text.
+	styleNavKey   = lipgloss.NewStyle().Foreground(colorNavKey)
+	styleNavLabel = lipgloss.NewStyle().Foreground(colorNavLabel)
+
+	// Workspace/agent badge in the status bar.
+	styleWorkspaceBadge = lipgloss.NewStyle().
+				Background(lipgloss.Color("13")).
+				Foreground(lipgloss.Color("15")).
+				Padding(0, 1)
 )
 
 func priorityStyle(p schema.Priority) lipgloss.Style {

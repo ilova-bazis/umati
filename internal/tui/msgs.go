@@ -34,3 +34,5 @@ type filterAppliedMsg struct {
 }
 
 type filterCancelledMsg struct{}
+
+type tickMsg struct{}

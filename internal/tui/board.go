@@ -70,7 +70,7 @@ func NewBoardModel(ctx workspace.Context, cfg schema.Config, agent schema.Actor)
 }
 
 func (m BoardModel) Init() tea.Cmd {
-	return loadTasksCmd(m.ctx)
+	return tea.Batch(loadTasksCmd(m.ctx), tickCmd())
 }
 
 // Run starts the bubbletea program.
@@ -140,6 +140,9 @@ func (m BoardModel) updateBoard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			events:   m.detailEvents,
 		}
 		return m, nil
+
+	case tickMsg:
+		return m, tea.Batch(loadTasksCmd(m.ctx), tickCmd())
 
 	case mutationDoneMsg:
 		m.setStatus(fmt.Sprintf("✓ %s %s", msg.command, msg.taskID), false)
@@ -235,18 +238,25 @@ func (m BoardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, keys.Enter):
+		cs := m.colState[m.columns[m.activeCol]]
+		if cs.cursor == len(cs.items) {
+			// Cursor is on the add row — open create form for this column's status.
+			m.overlay = overlayForm
+			m.form = newCreateForm(m.columns[m.activeCol], listWorkspaceFiles(m.ctx.Root))
+			return m, nil
+		}
 		m.toggleExpand()
 		return m, nil
 
 	case key.Matches(msg, keys.New):
 		m.overlay = overlayForm
-		m.form = newCreateForm()
+		m.form = newCreateForm(m.columns[m.activeCol], listWorkspaceFiles(m.ctx.Root))
 		return m, nil
 
 	case key.Matches(msg, keys.Edit):
 		if t := m.selectedTask(); t != nil {
 			m.overlay = overlayForm
-			m.form = newEditForm(*t)
+			m.form = newEditForm(*t, listWorkspaceFiles(m.ctx.Root))
 		}
 		return m, nil
 
@@ -352,12 +362,10 @@ func (m BoardModel) filteredTasks() []schema.Task {
 
 func (m *BoardModel) moveCursor(delta int) {
 	cs := m.colState[m.columns[m.activeCol]]
-	if len(cs.items) == 0 {
-		return
-	}
 	cs.cursor += delta
 	visibleRows := m.cardsAreaHeight()
-	cs.clamp(visibleRows / linesPerCard)
+	// +1 to account for the add-row slot
+	cs.clamp((visibleRows / linesPerCard) + 1)
 }
 
 func (m BoardModel) selectedTask() *schema.Task {
@@ -423,7 +431,6 @@ func (m BoardModel) View() string {
 	}
 
 	var parts []string
-	parts = append(parts, m.renderHeader())
 	parts = append(parts, m.renderBoard())
 	if m.showDetail {
 		parts = append(parts, m.renderDetailPanel())
@@ -434,21 +441,6 @@ func (m BoardModel) View() string {
 	return strings.Join(parts, "\n")
 }
 
-func (m BoardModel) renderHeader() string {
-	workspace := m.cfg.IDPrefix
-	agent := string(m.agent)
-	filterLabel := ""
-	if m.filter.isActive() {
-		filterLabel = "  " + styleStatusMsg.Render(m.filter.label())
-	}
-	left := "  UMATI BOARD  workspace:" + workspace + "  agent:" + agent + filterLabel
-	right := "  ?:help  R:refresh  q:quit  "
-	pad := m.width - lipgloss.Width(left) - lipgloss.Width(right)
-	if pad < 0 {
-		pad = 0
-	}
-	return styleHeader.Width(m.width).Render(left + strings.Repeat(" ", pad) + right)
-}
 
 func (m BoardModel) renderBoard() string {
 	colW := m.columnWidth()
@@ -480,8 +472,12 @@ func (m BoardModel) renderColumn(status schema.Status, cs *ColumnState, isActive
 	// Separator
 	sep := styleColSep.Render(strings.Repeat("─", colW))
 
-	// Cards
+	// In the active column, reserve one card-slot for the add row.
 	visibleCards := cardsH / linesPerCard
+	if isActive && visibleCards > 0 {
+		visibleCards--
+	}
+
 	var cardLines []string
 
 	end := cs.offset + visibleCards
@@ -497,14 +493,25 @@ func (m BoardModel) renderColumn(status schema.Status, cs *ColumnState, isActive
 		}
 	}
 
-	// Pad remaining space
+	// Pad card area to fill the reserved card slots.
 	totalCardLines := visibleCards * linesPerCard
 	for len(cardLines) < totalCardLines {
 		cardLines = append(cardLines, strings.Repeat(" ", colW))
 	}
-	// Trim to exact height
 	if len(cardLines) > totalCardLines {
 		cardLines = cardLines[:totalCardLines]
+	}
+
+	// Add row (active column only).
+	if isActive {
+		addSelected := cs.cursor == len(cs.items)
+		addLine0 := renderAddRow(addSelected, colW)
+		cardLines = append(cardLines,
+			addLine0,
+			strings.Repeat(" ", colW),
+			strings.Repeat(" ", colW),
+			strings.Repeat(" ", colW),
+		)
 	}
 
 	content := header + "\n" + sep + "\n" + strings.Join(cardLines, "\n")
@@ -522,20 +529,33 @@ func (m BoardModel) renderDetailPanel() string {
 }
 
 func (m BoardModel) renderStatusBar() string {
-	var msg string
+	// Left: workspace + agent identity badge (always shown).
+	left := styleWorkspaceBadge.Render("workspace:" + m.cfg.IDPrefix + "  agent:" + string(m.agent))
+	if m.filter.isActive() {
+		left += "  " + styleStatusMsg.Render(m.filter.label())
+	}
+
+	// Right: status message or selected-task summary.
+	var right string
 	if m.statusMsg != "" {
 		if m.statusIsErr {
-			msg = styleStatusErr.Render(m.statusMsg)
+			right = styleStatusErr.Render(m.statusMsg)
 		} else {
-			msg = styleStatusMsg.Render(m.statusMsg)
+			right = styleStatusMsg.Render(m.statusMsg)
 		}
-	} else {
-		if t := m.selectedTask(); t != nil {
-			msg = styleLabelFg.Render(fmt.Sprintf("%s · %s · %s · %s",
-				t.ID, t.Title, t.Status, assigneeDisplay(t.Assignee)))
-		}
+	} else if t := m.selectedTask(); t != nil {
+		right = styleLabelFg.Render(fmt.Sprintf("%s · %s · %s · %s",
+			t.ID, t.Title, string(t.Status), assigneeDisplay(t.Assignee)))
 	}
-	return styleStatusBar.Width(m.width).Render(msg)
+
+	if right != "" {
+		pad := m.width - lipgloss.Width(left) - lipgloss.Width(right) - 2
+		if pad < 1 {
+			pad = 1
+		}
+		return styleStatusBar.Width(m.width).Render(left + strings.Repeat(" ", pad) + right)
+	}
+	return styleStatusBar.Width(m.width).Render(left)
 }
 
 func (m BoardModel) renderHelpBar() string {
@@ -543,17 +563,24 @@ func (m BoardModel) renderHelpBar() string {
 	if t := m.selectedTask(); t != nil {
 		hints = renderActionHints(t, m.agent)
 	} else {
-		hints = styleCardDim.Render("↑↓:nav  ←→:col  enter:expand  tab:details  n:new  f:filter  ?:help  q:quit")
+		hints = renderNavHints()
 	}
 	return styleStatusBar.Width(m.width).Render(hints)
+}
+
+func renderNavHints() string {
+	return renderHintPairs([][2]string{
+		{"↑↓", "nav"}, {"←→", "col"}, {"enter", "expand"}, {"tab", "details"},
+		{"n", "new"}, {"f", "filter"}, {"R", "refresh"}, {"?", "help"}, {"q", "quit"},
+	})
 }
 
 // --- Layout calculations ---
 
 func (m BoardModel) fixedRows() int {
-	// header(1) + status-bar(1) + help-bar(1) = 3
+	// status-bar(1) + help-bar(1) = 2
 	// plus column-header(1) + separator(1) = 2
-	rows := 5
+	rows := 4
 	if m.showDetail {
 		rows += m.detailHeight()
 	}
@@ -582,4 +609,20 @@ func (m BoardModel) columnWidth() int {
 		w = 14
 	}
 	return w
+}
+
+// renderAddRow renders the "+ Add task" row at the bottom of the active column.
+func renderAddRow(isSelected bool, width int) string {
+	label := "  + Add task"
+	raw := []rune(label)
+	pad := width - len(raw)
+	if pad < 0 {
+		pad = 0
+		label = string(raw[:width])
+	}
+	content := label + strings.Repeat(" ", pad)
+	if isSelected {
+		return styleCardIDSelected.Render(content)
+	}
+	return styleCardDim.Render(content)
 }

@@ -19,6 +19,7 @@ type formResult struct {
 	status      schema.Status
 	parentID    string
 	assignee    string // empty means no assignee
+	files       []string
 	isEdit      bool
 	taskID      string
 }
@@ -32,6 +33,7 @@ const (
 	fieldStatus
 	fieldParent
 	fieldAssignee
+	fieldFiles
 	fieldCount
 )
 
@@ -67,22 +69,30 @@ type FormModel struct {
 	isEdit bool
 	taskID string
 
-	titleInput textinput.Model
-	descInput  textinput.Model
+	titleInput  textinput.Model
+	descInput   textinput.Model
 	parentInput textinput.Model
 
 	prioritySel enumSel
 	statusSel   enumSel
 	assigneeSel enumSel
 
-	focus   formField
-	errMsg  string
+	focus  formField
+	errMsg string
+
+	// File picker state
+	allFiles        []string
+	files           []string
+	fileQuery       string
+	fileSuggestions []string
+	fileCursor      int
+	showFilePicker  bool
 }
 
 var priorityOptions = []string{"low", "medium", "high", "urgent"}
 var assigneeOptions = []string{"", "human", "claude", "opencode", "codex"}
 
-func newCreateForm() FormModel {
+func newCreateForm(status schema.Status, allFiles []string) FormModel {
 	ti := textinput.New()
 	ti.Placeholder = "Task title (required)"
 	ti.Focus()
@@ -96,19 +106,30 @@ func newCreateForm() FormModel {
 	pi.Placeholder = "Parent task ID (e.g. UM-5)"
 	pi.CharLimit = 20
 
+	// Status selector only offers valid create-time statuses.
+	createStatuses := []string{"draft", "paused", "ready"}
+	statusIdx := 0
+	for i, s := range createStatuses {
+		if schema.Status(s) == status {
+			statusIdx = i
+			break
+		}
+	}
+
 	return FormModel{
 		titleInput:  ti,
 		descInput:   di,
 		parentInput: pi,
 		prioritySel: enumSel{options: priorityOptions, idx: 1}, // default: medium
-		statusSel:   enumSel{options: []string{"draft", "paused", "ready"}, idx: 0},
+		statusSel:   enumSel{options: createStatuses, idx: statusIdx},
 		assigneeSel: enumSel{options: assigneeOptions, idx: 0},
 		focus:       fieldTitle,
+		allFiles:    allFiles,
 	}
 }
 
-func newEditForm(task schema.Task) FormModel {
-	m := newCreateForm()
+func newEditForm(task schema.Task, allFiles []string) FormModel {
+	m := newCreateForm(schema.StatusDraft, allFiles)
 	m.isEdit = true
 	m.taskID = task.ID
 
@@ -136,6 +157,8 @@ func newEditForm(task schema.Task) FormModel {
 	if task.Assignee != nil {
 		m.assigneeSel.setTo(string(*task.Assignee))
 	}
+
+	m.files = task.Files
 
 	// Unfocus title since it already has content
 	m.titleInput.Blur()
@@ -166,6 +189,11 @@ func (m FormModel) Update(msg tea.Msg) (FormModel, tea.Cmd) {
 		// Clear error on any key
 		m.errMsg = ""
 
+		// File picker intercepts all keys when active.
+		if m.showFilePicker {
+			return m.updateFilePicker(msg)
+		}
+
 		switch {
 		case key.Matches(msg, keys.Escape):
 			return m, func() tea.Msg { return formCancelledMsg{} }
@@ -181,14 +209,24 @@ func (m FormModel) Update(msg tea.Msg) (FormModel, tea.Cmd) {
 			return m, nil
 
 		case key.Matches(msg, keys.Enter):
-			// On the last field, Enter submits the form.
-			if m.focus == fieldAssignee {
-				return m.submit()
+			if m.focus == fieldFiles {
+				// Open file picker.
+				m.showFilePicker = true
+				m.fileQuery = ""
+				m.fileSuggestions = m.allFiles
+				m.fileCursor = 0
+				return m, nil
 			}
-			// Advance focus (enum fields advance without cycling).
+			// Advance focus through other fields.
 			m.focus = (m.focus + 1) % fieldCount
 			m.syncFocus()
 			return m, nil
+
+		case msg.String() == "backspace", msg.String() == "ctrl+h":
+			if m.focus == fieldFiles && len(m.files) > 0 {
+				m.files = m.files[:len(m.files)-1]
+				return m, nil
+			}
 
 		case msg.String() == "left":
 			if m.focus == fieldPriority || m.focus == fieldStatus || m.focus == fieldAssignee {
@@ -207,7 +245,7 @@ func (m FormModel) Update(msg tea.Msg) (FormModel, tea.Cmd) {
 		}
 	}
 
-	// Route key events to focused text input
+	// Route key events to focused text input.
 	var cmd tea.Cmd
 	switch m.focus {
 	case fieldTitle:
@@ -222,6 +260,66 @@ func (m FormModel) Update(msg tea.Msg) (FormModel, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m FormModel) updateFilePicker(msg tea.KeyMsg) (FormModel, tea.Cmd) {
+	switch {
+	case key.Matches(msg, keys.Escape):
+		m.showFilePicker = false
+		m.fileQuery = ""
+		return m, nil
+
+	case msg.String() == "up":
+		if m.fileCursor > 0 {
+			m.fileCursor--
+		}
+		return m, nil
+
+	case msg.String() == "down":
+		if m.fileCursor < len(m.fileSuggestions)-1 {
+			m.fileCursor++
+		}
+		return m, nil
+
+	case key.Matches(msg, keys.Enter):
+		if len(m.fileSuggestions) > 0 && m.fileCursor < len(m.fileSuggestions) {
+			m.files = append(m.files, m.fileSuggestions[m.fileCursor])
+		}
+		m.showFilePicker = false
+		m.fileQuery = ""
+		return m, nil
+
+	case msg.String() == "backspace", msg.String() == "ctrl+h":
+		if len(m.fileQuery) > 0 {
+			runes := []rune(m.fileQuery)
+			m.fileQuery = string(runes[:len(runes)-1])
+			m.fileSuggestions = filterFiles(m.allFiles, m.fileQuery)
+			m.fileCursor = 0
+		}
+		return m, nil
+
+	default:
+		if msg.Type == tea.KeyRunes {
+			m.fileQuery += string(msg.Runes)
+			m.fileSuggestions = filterFiles(m.allFiles, m.fileQuery)
+			m.fileCursor = 0
+		}
+		return m, nil
+	}
+}
+
+func filterFiles(all []string, query string) []string {
+	if query == "" {
+		return all
+	}
+	q := strings.ToLower(query)
+	var result []string
+	for _, f := range all {
+		if strings.Contains(strings.ToLower(f), q) {
+			result = append(result, f)
+		}
+	}
+	return result
 }
 
 func (m *FormModel) cycleEnum(forward bool) {
@@ -263,7 +361,6 @@ func (m FormModel) submit() (FormModel, tea.Cmd) {
 
 	// Validate status transition for edit
 	if m.isEdit {
-		// We allowed the transition options in the selector already, no extra check needed
 		_ = domain.CanTransition // imported but not called here — the server-side op validates
 	}
 
@@ -274,6 +371,7 @@ func (m FormModel) submit() (FormModel, tea.Cmd) {
 		status:      status,
 		parentID:    strings.TrimSpace(m.parentInput.Value()),
 		assignee:    m.assigneeSel.value(),
+		files:       m.files,
 		isEdit:      m.isEdit,
 		taskID:      m.taskID,
 	}
@@ -281,6 +379,11 @@ func (m FormModel) submit() (FormModel, tea.Cmd) {
 }
 
 func (m FormModel) View(width, height int) string {
+	overlayWidth := 64
+	if width < overlayWidth+4 {
+		overlayWidth = width - 4
+	}
+
 	mode := "New Task"
 	if m.isEdit {
 		mode = fmt.Sprintf("Edit %s", m.taskID)
@@ -288,6 +391,21 @@ func (m FormModel) View(width, height int) string {
 
 	var sb strings.Builder
 	sb.WriteString(styleFocusedLabel.Render(mode) + "\n\n")
+
+	// Build files display for the field row.
+	var filesView string
+	if len(m.files) == 0 {
+		filesView = styleCardDim.Render("(none)")
+	} else {
+		lines := make([]string, len(m.files))
+		for i, f := range m.files {
+			lines[i] = styleValueFg.Render(f)
+		}
+		filesView = strings.Join(lines, "\n              ")
+	}
+	if m.focus == fieldFiles {
+		filesView += "  " + styleCardDim.Render("[enter: pick  backspace: remove last]")
+	}
 
 	fields := []struct {
 		label string
@@ -300,6 +418,7 @@ func (m FormModel) View(width, height int) string {
 		{"Status      ", fieldStatus, m.renderEnum(m.statusSel, m.focus == fieldStatus)},
 		{"Parent ID   ", fieldParent, m.parentInput.View()},
 		{"Assignee    ", fieldAssignee, m.renderEnum(m.assigneeSel, m.focus == fieldAssignee)},
+		{"Files       ", fieldFiles, filesView},
 	}
 
 	for _, f := range fields {
@@ -314,13 +433,50 @@ func (m FormModel) View(width, height int) string {
 	if m.errMsg != "" {
 		sb.WriteString(styleStatusErr.Render("  ✗ "+m.errMsg) + "\n\n")
 	}
-	sb.WriteString(styleCardDim.Render("ctrl+s: submit  esc: cancel  tab/↑↓: navigate  ←→: cycle options"))
 
-	overlayWidth := 64
-	if width < overlayWidth+4 {
-		overlayWidth = width - 4
+	if m.showFilePicker {
+		sb.WriteString(m.renderFilePicker(overlayWidth))
 	}
+
+	sb.WriteString(renderHintPairs([][2]string{
+		{"ctrl+s", "submit"}, {"esc", "cancel"}, {"tab/↑↓", "navigate"}, {"←→", "cycle options"},
+	}))
+
 	return styleOverlay.Width(overlayWidth).Render(sb.String())
+}
+
+func (m FormModel) renderFilePicker(width int) string {
+	const maxVisible = 6
+
+	var sb strings.Builder
+
+	sep := strings.Repeat("─", max(0, width-4))
+	sb.WriteString(styleCardDim.Render(sep) + "\n")
+	sb.WriteString(styleFocusedLabel.Render("Search: ") + styleValueFg.Render(m.fileQuery+"_") + "\n")
+
+	if len(m.fileSuggestions) == 0 {
+		sb.WriteString(styleCardDim.Render("  (no matches)") + "\n")
+	} else {
+		start := m.fileCursor - maxVisible + 1
+		if start < 0 {
+			start = 0
+		}
+		end := start + maxVisible
+		if end > len(m.fileSuggestions) {
+			end = len(m.fileSuggestions)
+		}
+		for i := start; i < end; i++ {
+			f := m.fileSuggestions[i]
+			if i == m.fileCursor {
+				sb.WriteString(styleCardIDSelected.Render("  ▸ "+f) + "\n")
+			} else {
+				sb.WriteString(styleValueFg.Render("    "+f) + "\n")
+			}
+		}
+	}
+
+	sb.WriteString(renderHintPairs([][2]string{{"enter", "add"}, {"esc", "cancel"}}) + "\n\n")
+	return sb.String()
 }
 
 func (m FormModel) renderEnum(sel enumSel, focused bool) string {

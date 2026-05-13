@@ -69,6 +69,12 @@ func (d DetailModel) View(width int) string {
 	}
 
 	inner := titleLine + "\n" + metaLine + "\n" + desc
+	if len(t.Files) > 0 {
+		inner += "\n" + styleLabelFg.Render("Files:")
+		for _, f := range t.Files {
+			inner += "\n  " + styleValueFg.Render(f)
+		}
+	}
 	if len(subtaskParts) > 0 {
 		inner += "\n" + styleLabelFg.Render("Subtasks:") + "\n" + strings.Join(subtaskParts, "\n")
 	}
@@ -110,9 +116,28 @@ func renderActionHints(t *schema.Task, agent schema.Actor) string {
 
 	parts := make([]string, len(hints))
 	for i, h := range hints {
-		parts[i] = styleValueFg.Render(h)
+		parts[i] = renderHint(h)
 	}
-	return "Actions: " + strings.Join(parts, "  ")
+	return styleNavLabel.Render("Actions: ") + strings.Join(parts, styleNavLabel.Render("  "))
+}
+
+// renderHint renders a hint like "[e]dit" — bracketed key in bright white, rest in cyan.
+func renderHint(h string) string {
+	start := strings.Index(h, "[")
+	end := strings.Index(h, "]")
+	if start == -1 || end == -1 || end <= start {
+		return styleNavLabel.Render(h)
+	}
+	return styleNavKey.Render(h[start:end+1]) + styleNavLabel.Render(h[end+1:])
+}
+
+// renderHintPairs renders key:label pairs with consistent nav-bar styling.
+func renderHintPairs(pairs [][2]string) string {
+	parts := make([]string, len(pairs))
+	for i, p := range pairs {
+		parts[i] = styleNavKey.Render(p[0]) + styleNavLabel.Render(":"+p[1])
+	}
+	return strings.Join(parts, styleNavLabel.Render("  "))
 }
 
 func assigneeDisplay(a *schema.Actor) string {

@@ -47,7 +47,7 @@ func (h HelpModel) View(width, height int) string {
 			{"n", "create new task"},
 			{"e", "edit selected task"},
 			{"f", "filter by priority / agent"},
-			{"R", "refresh from disk"},
+			{"R", "refresh (auto: 2s)"},
 			{"?", "toggle this help"},
 			{"q / ctrl+c", "quit"},
 		}},
@@ -57,13 +57,13 @@ func (h HelpModel) View(width, height int) string {
 		sb.WriteString(styleLabelFg.Render(sec.heading) + "\n")
 		for _, row := range sec.rows {
 			key := styleCardID.Render(padRight(row[0], 14))
-			desc := styleCardDim.Render(row[1])
+			desc := styleLabelFg.Render(row[1])
 			sb.WriteString("  " + key + " " + desc + "\n")
 		}
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(styleCardDim.Render("press ? or esc to close"))
+	sb.WriteString(renderHintPairs([][2]string{{"?/esc", "close"}}))
 
 	overlayWidth := 52
 	if width < overlayWidth+4 {

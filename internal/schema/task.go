@@ -14,6 +14,7 @@ type Task struct {
 	UpdatedAt   string   `json:"updated_at"`
 	CreatedBy   Actor    `json:"created_by"`
 	UpdatedBy   Actor    `json:"updated_by"`
+	Files       []string `json:"files,omitempty"`
 	DeletedAt   *string  `json:"deleted_at,omitempty"`
 	DeletedBy   *Actor   `json:"deleted_by,omitempty"`
 }

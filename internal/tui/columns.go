@@ -35,29 +35,27 @@ func (cs *ColumnState) rebuild(status schema.Status, allTasks []schema.Task) {
 }
 
 // clamp ensures cursor and offset are within valid bounds.
+// Cursor may range from 0 to len(items) inclusive — len(items) is the add-row position.
 // visibleRows=0 means don't constrain offset.
 func (cs *ColumnState) clamp(visibleRows int) {
+	// Valid cursor range: [0, len(items)] — the add row is at len(items).
 	n := len(cs.items)
-	if n == 0 {
-		cs.cursor = 0
-		cs.offset = 0
-		return
-	}
-	if cs.cursor >= n {
-		cs.cursor = n - 1
+	if cs.cursor > n {
+		cs.cursor = n
 	}
 	if cs.cursor < 0 {
 		cs.cursor = 0
 	}
 	if visibleRows > 0 {
-		// Keep cursor visible
+		// Include the add-row slot when computing scroll bounds.
+		total := n + 1
 		if cs.cursor < cs.offset {
 			cs.offset = cs.cursor
 		}
 		if cs.cursor >= cs.offset+visibleRows {
 			cs.offset = cs.cursor - visibleRows + 1
 		}
-		maxOffset := max(0, n-visibleRows)
+		maxOffset := max(0, total-visibleRows)
 		if cs.offset > maxOffset {
 			cs.offset = maxOffset
 		}

@@ -2,7 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ilova-bazis/umati/internal/domain"
@@ -10,6 +14,37 @@ import (
 	"github.com/ilova-bazis/umati/internal/store"
 	"github.com/ilova-bazis/umati/internal/workspace"
 )
+
+const refreshInterval = 2 * time.Second
+
+var skipDirs = map[string]bool{
+	".git": true, ".umati": true,
+	"node_modules": true, "vendor": true,
+}
+
+func listWorkspaceFiles(root string) []string {
+	var files []string
+	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() && skipDirs[d.Name()] {
+			return filepath.SkipDir
+		}
+		if !d.IsDir() {
+			rel, _ := filepath.Rel(root, path)
+			files = append(files, strings.ReplaceAll(rel, "\\", "/"))
+		}
+		return nil
+	})
+	return files
+}
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(refreshInterval, func(time.Time) tea.Msg {
+		return tickMsg{}
+	})
+}
 
 func loadTasksCmd(ctx workspace.Context) tea.Cmd {
 	return func() tea.Msg {
@@ -277,6 +312,7 @@ func createTaskCmd(ctx workspace.Context, agent schema.Actor, r formResult) tea.
 				Status:      r.status,
 				Assignee:    assignee,
 				ParentID:    parentID,
+				Files:       r.files,
 				CreatedAt:   now,
 				UpdatedAt:   now,
 				CreatedBy:   agent,
@@ -361,6 +397,10 @@ func updateTaskCmd(ctx workspace.Context, agent schema.Actor, taskID string, r f
 					updated = true
 				}
 			}
+
+			// Always update files (empty slice clears them)
+			task.Files = r.files
+			updated = true
 
 			if !updated {
 				return nil, nil

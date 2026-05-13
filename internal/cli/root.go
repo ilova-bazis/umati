@@ -46,6 +46,8 @@ func Run(args []string) error {
 		return runRelease(args[1:])
 	case "complete":
 		return runComplete(args[1:])
+	case "cancel":
+		return runCancel(args[1:])
 	case "delete":
 		return runDelete(args[1:])
 	case "init":
@@ -84,6 +86,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  pause <task-id> --agent <agent>    Pause a claimed or in-progress task")
 	fmt.Fprintln(os.Stderr, "  release <task-id> --agent <agent>  Release a claimed task")
 	fmt.Fprintln(os.Stderr, "  complete <task-id> --agent <agent> Complete an in-progress task")
+	fmt.Fprintln(os.Stderr, "  cancel <task-id> --agent <agent>   Cancel a task (any non-terminal status)")
 	fmt.Fprintln(os.Stderr, "  delete <task-id> --agent <agent>   Delete a task")
 	fmt.Fprintln(os.Stderr, "  board --agent <agent>              Open the interactive kanban board")
 	fmt.Fprintln(os.Stderr, "  help                               Show this help message")
@@ -573,6 +576,15 @@ func runRelease(args []string) error {
 	})
 }
 
+func runCancel(args []string) error {
+	return runStatusChange(args, "cancel", schema.StatusCancelled, func(task schema.Task) error {
+		if domain.IsTerminalStatus(task.Status) {
+			return fmt.Errorf("task is already %s", task.Status)
+		}
+		return nil
+	})
+}
+
 func runComplete(args []string) error {
 	return runStatusChangeWithValidation(args, "complete", schema.StatusDone, func(task schema.Task, allTasks []schema.Task) error {
 		if task.Status != schema.StatusInProgress {
@@ -754,6 +766,8 @@ func runStatusChangeWithValidation(args []string, command string, newStatus sche
 		eventType = schema.EventReleased
 	case "complete":
 		eventType = schema.EventCompleted
+	case "cancel":
+		eventType = schema.EventCancelled
 	}
 
 	// Perform mutation with lock
@@ -802,8 +816,8 @@ func runStatusChangeWithValidation(args []string, command string, newStatus sche
 			task.Assignee = &actor
 		}
 
-		// Clear assignee for complete
-		if newStatus == schema.StatusDone {
+		// Clear assignee for complete or cancel
+		if newStatus == schema.StatusDone || newStatus == schema.StatusCancelled {
 			task.Assignee = nil
 		}
 
