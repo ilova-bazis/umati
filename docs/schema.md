@@ -109,6 +109,7 @@ Example active task:
   "status": "ready",
   "assignee": null,
   "parent_id": null,
+  "tags": [],
   "created_at": "2026-04-03T10:00:00Z",
   "updated_at": "2026-04-03T10:15:00Z",
   "created_by": "human",
@@ -143,6 +144,8 @@ Example active task:
 - `updated_at`: ISO 8601 UTC timestamp
 - `created_by`: one of `opencode`, `codex`, `claude`, `human`
 - `updated_by`: one of `opencode`, `codex`, `claude`, `human`
+
+Additionally, `tags` is an optional array of strings (`["bug", "api"]`), defaulting to `[]` when omitted. Tags are stored lowercase and deduplicated.
 
 ## Deleted Task Schema
 

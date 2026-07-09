@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -312,6 +313,7 @@ func createTaskCmd(ctx workspace.Context, agent schema.Actor, r formResult) tea.
 				Status:      r.status,
 				Assignee:    assignee,
 				ParentID:    parentID,
+				Tags:        r.tags,
 				Files:       r.files,
 				CreatedAt:   now,
 				UpdatedAt:   now,
@@ -398,9 +400,17 @@ func updateTaskCmd(ctx workspace.Context, agent schema.Actor, taskID string, r f
 				}
 			}
 
-			// Always update files (empty slice clears them)
-			task.Files = r.files
-			updated = true
+			// Update files only when changed.
+			if !slices.Equal(task.Files, r.files) {
+				task.Files = r.files
+				updated = true
+			}
+
+			// Update tags only when changed.
+			if !slices.Equal(task.Tags, r.tags) {
+				task.Tags = r.tags
+				updated = true
+			}
 
 			if !updated {
 				return nil, nil

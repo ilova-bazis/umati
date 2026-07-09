@@ -75,6 +75,9 @@ func (d DetailModel) View(width int) string {
 			inner += "\n  " + styleValueFg.Render(f)
 		}
 	}
+	if len(t.Tags) > 0 {
+		inner += "\n" + styleLabelFg.Render("Tags:") + " " + styleValueFg.Render(strings.Join(t.Tags, ", "))
+	}
 	if len(subtaskParts) > 0 {
 		inner += "\n" + styleLabelFg.Render("Subtasks:") + "\n" + strings.Join(subtaskParts, "\n")
 	}

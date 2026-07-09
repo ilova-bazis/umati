@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ilova-bazis/umati/internal/schema"
 )
@@ -12,10 +13,11 @@ import (
 type FilterState struct {
 	priority *schema.Priority
 	agent    *schema.Actor
+	tags     []string
 }
 
 func (fs FilterState) isActive() bool {
-	return fs.priority != nil || fs.agent != nil
+	return fs.priority != nil || fs.agent != nil || len(fs.tags) > 0
 }
 
 func (fs FilterState) label() string {
@@ -25,6 +27,9 @@ func (fs FilterState) label() string {
 	}
 	if fs.agent != nil {
 		parts = append(parts, "agent:"+string(*fs.agent))
+	}
+	if len(fs.tags) > 0 {
+		parts = append(parts, "tags:"+strings.Join(fs.tags, ","))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -36,7 +41,8 @@ func (fs FilterState) label() string {
 type FilterModel struct {
 	prioritySel enumSel // index 0 = "any"
 	agentSel    enumSel // index 0 = "any"
-	focus       int     // 0 = priority, 1 = agent
+	tagsInput   textinput.Model
+	focus       int // 0 = priority, 1 = agent, 2 = tags
 }
 
 var filterPriorityOptions = []string{"any", "low", "medium", "high", "urgent"}
@@ -53,9 +59,25 @@ func newFilterModel(current FilterState) FilterModel {
 		as.setTo(string(*current.agent))
 	}
 
+	ti := textinput.New()
+	ti.Placeholder = "comma-separated (bug, api)"
+	ti.CharLimit = 200
+	if len(current.tags) > 0 {
+		ti.SetValue(strings.Join(current.tags, ", "))
+	}
+
 	return FilterModel{
 		prioritySel: ps,
 		agentSel:    as,
+		tagsInput:   ti,
+	}
+}
+
+func (m *FilterModel) syncFocus() {
+	if m.focus == 2 {
+		m.tagsInput.Focus()
+	} else {
+		m.tagsInput.Blur()
 	}
 }
 
@@ -70,21 +92,31 @@ func (m FilterModel) Update(msg tea.Msg) (FilterModel, tea.Cmd) {
 			return m, m.applyCmd()
 
 		case key.Matches(msg, keys.Tab), msg.String() == "down":
-			m.focus = (m.focus + 1) % 2
+			m.focus = (m.focus + 1) % 3
+			m.syncFocus()
 		case msg.String() == "shift+tab", msg.String() == "up":
-			m.focus = (m.focus - 1 + 2) % 2
+			m.focus = (m.focus - 1 + 3) % 3
+			m.syncFocus()
 
 		case msg.String() == "left":
 			if m.focus == 0 {
 				m.prioritySel.prev()
-			} else {
+			} else if m.focus == 1 {
 				m.agentSel.prev()
 			}
 		case msg.String() == "right":
 			if m.focus == 0 {
 				m.prioritySel.next()
-			} else {
+			} else if m.focus == 1 {
 				m.agentSel.next()
+			}
+
+		default:
+			// Route to tagsInput when focused
+			if m.focus == 2 {
+				var cmd tea.Cmd
+				m.tagsInput, cmd = m.tagsInput.Update(msg)
+				return m, cmd
 			}
 		}
 	}
@@ -102,8 +134,9 @@ func (m FilterModel) applyCmd() tea.Cmd {
 		a := schema.Actor(m.agentSel.value())
 		agent = &a
 	}
+	tags := parseTags(m.tagsInput.Value())
 	return func() tea.Msg {
-		return filterAppliedMsg{priority: priority, agent: agent}
+		return filterAppliedMsg{priority: priority, agent: agent, tags: tags}
 	}
 }
 
@@ -122,6 +155,12 @@ func (m FilterModel) View(width, height int) string {
 		agentLabel = styleFocusedLabel.Render("Agent      : ")
 	}
 	sb.WriteString(agentLabel + renderEnumSel(m.agentSel, m.focus == 1) + "\n")
+
+	tagsLabel := styleLabelFg.Render("Tags       : ")
+	if m.focus == 2 {
+		tagsLabel = styleFocusedLabel.Render("Tags       : ")
+	}
+	sb.WriteString(tagsLabel + m.tagsInput.View() + "\n")
 
 	sb.WriteString("\n")
 	sb.WriteString(styleCardDim.Render("enter: apply  esc: cancel  ←→: change  tab/↑↓: navigate"))

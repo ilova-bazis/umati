@@ -1,6 +1,9 @@
 package schema
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Task struct {
 	ID          string   `json:"id"`
@@ -14,6 +17,7 @@ type Task struct {
 	UpdatedAt   string   `json:"updated_at"`
 	CreatedBy   Actor    `json:"created_by"`
 	UpdatedBy   Actor    `json:"updated_by"`
+	Tags        []string `json:"tags,omitempty"`
 	Files       []string `json:"files,omitempty"`
 	DeletedAt   *string  `json:"deleted_at,omitempty"`
 	DeletedBy   *Actor   `json:"deleted_by,omitempty"`
@@ -84,5 +88,59 @@ func validateBaseTask(task Task) error {
 	if err := ValidateTimestamp(task.UpdatedAt); err != nil {
 		return fmt.Errorf("updated_at: %w", err)
 	}
+	if err := validateTags(task.Tags); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateTags(tags []string) error {
+	seen := make(map[string]bool, len(tags))
+	for _, t := range tags {
+		if t == "" {
+			return fmt.Errorf("tag must not be empty")
+		}
+		if strings.ToLower(t) != t {
+			return fmt.Errorf("tag %q must be lowercase", t)
+		}
+		if seen[t] {
+			return fmt.Errorf("duplicate tag %q", t)
+		}
+		seen[t] = true
+	}
+	return nil
+}
+
+func NormalizeTags(tags []string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		lower := strings.ToLower(t)
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
+		out = append(out, lower)
+	}
+	return out
+}
+
+func HasAllTags(taskTags, filterTags []string) bool {
+	for _, ft := range filterTags {
+		found := false
+		for _, tt := range taskTags {
+			if tt == ft {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }

@@ -31,6 +31,7 @@ type formCancelledMsg struct{}
 type filterAppliedMsg struct {
 	priority *schema.Priority
 	agent    *schema.Actor
+	tags     []string
 }
 
 type filterCancelledMsg struct{}

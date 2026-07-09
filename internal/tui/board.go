@@ -170,7 +170,7 @@ func (m BoardModel) updateBoard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case filterAppliedMsg:
-		m.filter = FilterState{priority: msg.priority, agent: msg.agent}
+		m.filter = FilterState{priority: msg.priority, agent: msg.agent, tags: msg.tags}
 		m.overlay = overlayNone
 		m.rebuildAllColumns()
 		return m, nil
@@ -355,6 +355,9 @@ func (m BoardModel) filteredTasks() []schema.Task {
 		if m.filter.agent != nil && (t.Assignee == nil || *t.Assignee != *m.filter.agent) {
 			continue
 		}
+		if len(m.filter.tags) > 0 && !schema.HasAllTags(t.Tags, m.filter.tags) {
+			continue
+		}
 		out = append(out, t)
 	}
 	return out
@@ -529,13 +532,7 @@ func (m BoardModel) renderDetailPanel() string {
 }
 
 func (m BoardModel) renderStatusBar() string {
-	// Left: workspace + agent identity badge (always shown).
-	left := styleWorkspaceBadge.Render("workspace:" + m.cfg.IDPrefix + "  agent:" + string(m.agent))
-	if m.filter.isActive() {
-		left += "  " + styleStatusMsg.Render(m.filter.label())
-	}
-
-	// Right: status message or selected-task summary.
+	// Build right side first so we know how much room remains.
 	var right string
 	if m.statusMsg != "" {
 		if m.statusIsErr {
@@ -546,6 +543,25 @@ func (m BoardModel) renderStatusBar() string {
 	} else if t := m.selectedTask(); t != nil {
 		right = styleLabelFg.Render(fmt.Sprintf("%s · %s · %s · %s",
 			t.ID, t.Title, string(t.Status), assigneeDisplay(t.Assignee)))
+	}
+
+	// Left: workspace + agent identity badge (always shown).
+	left := styleWorkspaceBadge.Render("workspace:" + m.cfg.IDPrefix + "  agent:" + string(m.agent))
+	if m.filter.isActive() {
+		rawLabel := m.filter.label()
+		// Truncate label to fit available display width.
+		// Tags are lowercase ASCII, so byte-length equals visual width.
+		used := lipgloss.Width(left) + 2 // 2 for "  " separator
+		rightW := lipgloss.Width(right)
+		avail := m.width - used - rightW - 2 // 2 for pad spacing
+		const minLabel = 10
+		if avail < minLabel {
+			avail = minLabel
+		}
+		if len(rawLabel) > avail {
+			rawLabel = rawLabel[:avail-3] + "..."
+		}
+		left += "  " + styleStatusMsg.Render(rawLabel)
 	}
 
 	if right != "" {

@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/ilova-bazis/umati/internal/schema"
 )
 
 // interactivePrompt handles interactive task creation prompts
@@ -16,6 +18,7 @@ func interactivePrompt() (*struct {
 	status      string
 	parent      string
 	agent       string
+	tags        []string
 }, error) {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -69,6 +72,20 @@ func interactivePrompt() (*struct {
 	}
 	agent := agentOptions[agentIdx]
 
+	// Tags (optional)
+	tagsStr, err := promptString(reader, "Tags (comma-separated)", false, "")
+	if err != nil {
+		return nil, err
+	}
+	var tags []string
+	for _, t := range strings.Split(tagsStr, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+	tags = schema.NormalizeTags(tags)
+
 	// Build result
 	result := &struct {
 		title       string
@@ -77,6 +94,7 @@ func interactivePrompt() (*struct {
 		status      string
 		parent      string
 		agent       string
+		tags        []string
 	}{
 		title:       title,
 		description: description,
@@ -84,6 +102,7 @@ func interactivePrompt() (*struct {
 		status:      status,
 		parent:      parent,
 		agent:       agent,
+		tags:        tags,
 	}
 
 	// Show summary and confirm
@@ -183,6 +202,7 @@ func promptConfirm(reader *bufio.Reader, opts *struct {
 	status      string
 	parent      string
 	agent       string
+	tags        []string
 }) bool {
 	fmt.Println("\nCreate this task?")
 	fmt.Println("==================")
@@ -204,6 +224,12 @@ func promptConfirm(reader *bufio.Reader, opts *struct {
 	fmt.Printf("  Parent:      %s\n", parent)
 
 	fmt.Printf("  Agent:       %s\n", opts.agent)
+
+	tags := "none"
+	if len(opts.tags) > 0 {
+		tags = strings.Join(opts.tags, ", ")
+	}
+	fmt.Printf("  Tags:        %s\n", tags)
 	fmt.Println()
 
 	for {

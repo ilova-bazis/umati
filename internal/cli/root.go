@@ -95,6 +95,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  --status <status>       Filter by status")
 	fmt.Fprintln(os.Stderr, "  --priority <priority>   Filter by priority")
 	fmt.Fprintln(os.Stderr, "  --agent <agent>         Filter by assignee")
+	fmt.Fprintln(os.Stderr, "  --tag <tag>             Filter by tag (repeatable, AND matching)")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Create options:")
 	fmt.Fprintln(os.Stderr, "  --title <title>         Task title (required)")
@@ -102,6 +103,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  --priority <level>      low|medium|high|urgent (default: medium)")
 	fmt.Fprintln(os.Stderr, "  --status <status>       draft|paused|ready (default: draft)")
 	fmt.Fprintln(os.Stderr, "  --parent <task-id>      Parent task ID for subtasks")
+	fmt.Fprintln(os.Stderr, "  --tag <tag>             Tag to attach (repeatable)")
 	fmt.Fprintln(os.Stderr, "  --agent <agent>         opencode|codex|claude|human (required)")
 	fmt.Fprintln(os.Stderr, "  -i, --interactive       Interactive mode (prompts for all fields)")
 	fmt.Fprintln(os.Stderr, "")
@@ -111,6 +113,9 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  --priority <level>      New priority")
 	fmt.Fprintln(os.Stderr, "  --status <status>       New status (with transition validation)")
 	fmt.Fprintln(os.Stderr, "  --parent <task-id>      New parent (or 'none' for top-level)")
+	fmt.Fprintln(os.Stderr, "  --add-tag <tag>         Add a tag (repeatable)")
+	fmt.Fprintln(os.Stderr, "  --remove-tag <tag>      Remove a tag (repeatable)")
+	fmt.Fprintln(os.Stderr, "  --clear-tags            Remove all tags")
 	fmt.Fprintln(os.Stderr, "  --agent <agent>         Required for all updates")
 }
 
@@ -126,6 +131,7 @@ func runList(args []string) error {
 		status   *string
 		priority *string
 		agent    *string
+		tags     []string
 	}
 
 	for i := 1; i < len(args); i++ {
@@ -148,6 +154,12 @@ func runList(args []string) error {
 				return fmt.Errorf("--agent requires a value")
 			}
 			filters.agent = &args[i]
+		case "--tag":
+			i++
+			if i >= len(args) {
+				return fmt.Errorf("--tag requires a value")
+			}
+			filters.tags = append(filters.tags, args[i])
 		default:
 			return fmt.Errorf("unknown flag: %s", args[i])
 		}
@@ -169,6 +181,7 @@ func runListAll(filters struct {
 	status   *string
 	priority *string
 	agent    *string
+	tags     []string
 }) error {
 	ctx, cfg, err := loadWorkspace()
 	if err != nil {
@@ -190,6 +203,7 @@ func runListReady(filters struct {
 	status   *string
 	priority *string
 	agent    *string
+	tags     []string
 }) error {
 	ctx, cfg, err := loadWorkspace()
 	if err != nil {
@@ -211,6 +225,7 @@ func runListMine(filters struct {
 	status   *string
 	priority *string
 	agent    *string
+	tags     []string
 }) error {
 	if filters.agent == nil {
 		return fmt.Errorf("--agent is required for 'list mine'")
@@ -255,8 +270,11 @@ func applyFilters(tasks []schema.Task, filters struct {
 	status   *string
 	priority *string
 	agent    *string
+	tags     []string
 }) []schema.Task {
 	var result []schema.Task
+
+	normalizedFilterTags := schema.NormalizeTags(filters.tags)
 
 	for _, task := range tasks {
 		// Status filter
@@ -278,6 +296,11 @@ func applyFilters(tasks []schema.Task, filters struct {
 			if task.Assignee == nil || string(*task.Assignee) != *filters.agent {
 				continue
 			}
+		}
+
+		// Tag filter (AND matching)
+		if len(filters.tags) > 0 && !schema.HasAllTags(task.Tags, normalizedFilterTags) {
+			continue
 		}
 
 		result = append(result, task)
@@ -345,6 +368,7 @@ func runCreate(args []string) error {
 		status      string
 		parent      string
 		agent       string
+		tags        []string
 	}
 
 	for i := 0; i < len(filteredArgs); i++ {
@@ -379,6 +403,12 @@ func runCreate(args []string) error {
 				return fmt.Errorf("--parent requires a value")
 			}
 			opts.parent = filteredArgs[i]
+		case "--tag":
+			i++
+			if i >= len(filteredArgs) {
+				return fmt.Errorf("--tag requires a value")
+			}
+			opts.tags = append(opts.tags, filteredArgs[i])
 		case "--agent":
 			i++
 			if i >= len(filteredArgs) {
@@ -408,6 +438,7 @@ func runCreateInteractive() error {
 		status      string
 		parent      string
 		agent       string
+		tags        []string
 	}{
 		title:       result.title,
 		description: result.description,
@@ -415,6 +446,7 @@ func runCreateInteractive() error {
 		status:      result.status,
 		parent:      result.parent,
 		agent:       result.agent,
+		tags:        result.tags,
 	}
 
 	return runCreateWithOpts(opts)
@@ -427,6 +459,7 @@ func runCreateWithOpts(opts struct {
 	status      string
 	parent      string
 	agent       string
+	tags        []string
 }) error {
 	// Validate required arguments
 	if opts.title == "" {
@@ -498,6 +531,8 @@ func runCreateWithOpts(opts struct {
 
 		now := schema.NowTimestamp()
 
+		normalizedTags := schema.NormalizeTags(opts.tags)
+
 		// Create task
 		task := schema.Task{
 			ID:          newID,
@@ -507,6 +542,7 @@ func runCreateWithOpts(opts struct {
 			Status:      status,
 			Assignee:    nil,
 			ParentID:    parentID,
+			Tags:        normalizedTags,
 			CreatedAt:   now,
 			UpdatedAt:   now,
 			CreatedBy:   actor,
@@ -1042,6 +1078,9 @@ func runUpdate(args []string) error {
 		status      *string
 		parent      *string
 		agent       string
+		addTags     []string
+		removeTags  []string
+		clearTags   bool
 	}
 
 	for i := 1; i < len(args); i++ {
@@ -1076,6 +1115,20 @@ func runUpdate(args []string) error {
 				return fmt.Errorf("--parent requires a value")
 			}
 			opts.parent = &args[i]
+		case "--add-tag":
+			i++
+			if i >= len(args) {
+				return fmt.Errorf("--add-tag requires a value")
+			}
+			opts.addTags = append(opts.addTags, args[i])
+		case "--remove-tag":
+			i++
+			if i >= len(args) {
+				return fmt.Errorf("--remove-tag requires a value")
+			}
+			opts.removeTags = append(opts.removeTags, args[i])
+		case "--clear-tags":
+			opts.clearTags = true
 		case "--agent":
 			i++
 			if i >= len(args) {
@@ -1098,7 +1151,8 @@ func runUpdate(args []string) error {
 
 	// Check if any field is being updated
 	if opts.title == nil && opts.description == nil && opts.priority == nil &&
-		opts.status == nil && opts.parent == nil {
+		opts.status == nil && opts.parent == nil &&
+		len(opts.addTags) == 0 && len(opts.removeTags) == 0 && !opts.clearTags {
 		return fmt.Errorf("no fields to update")
 	}
 
@@ -1182,6 +1236,32 @@ func runUpdate(args []string) error {
 				}
 				task.ParentID = opts.parent
 			}
+			updated = true
+		}
+
+		// Update tags
+		if opts.clearTags {
+			task.Tags = nil
+			updated = true
+		} else if len(opts.addTags) > 0 || len(opts.removeTags) > 0 {
+			currentTags := task.Tags
+			for _, t := range schema.NormalizeTags(opts.addTags) {
+				currentTags = append(currentTags, t)
+			}
+			if len(opts.removeTags) > 0 {
+				removeSet := make(map[string]bool)
+				for _, t := range schema.NormalizeTags(opts.removeTags) {
+					removeSet[t] = true
+				}
+				var kept []string
+				for _, t := range currentTags {
+					if !removeSet[t] {
+						kept = append(kept, t)
+					}
+				}
+				currentTags = kept
+			}
+			task.Tags = schema.NormalizeTags(currentTags)
 			updated = true
 		}
 
@@ -1324,6 +1404,7 @@ Filters:
 - ` + "`--status <status>`" + ` - Filter by status
 - ` + "`--priority <priority>`" + ` - Filter by priority
 - ` + "`--agent <agent>`" + ` - Filter by assignee
+- ` + "`--tag <tag>`" + ` - Filter by tag (repeatable, AND matching)
 
 Example:
 ` + "```bash" + `
@@ -1383,12 +1464,14 @@ Optional:
 - ` + "`--priority <level>`" + ` - low|medium|high|urgent (default: medium)
 - ` + "`--status <status>`" + ` - draft|paused|ready (default: draft)
 - ` + "`--parent <task-id>`" + ` - Parent task for subtasks
+- ` + "`--tag <tag>`" + ` - Tag to attach (repeatable)
 - ` + "`-i, --interactive`" + ` - Interactive mode (prompts for fields)
 
 Example:
 ` + "```bash" + `
 umati create --title "Fix bug" --description "Fix the login bug" --priority high --status ready --agent human
 umati create --title "Subtask" --description "Part of the work" --parent UM-12 --agent human
+umati create --title "API issue" --description "..." --tag bug --tag api --agent human
 umati create -i  # Interactive mode
 ` + "```" + `
 
@@ -1405,6 +1488,9 @@ Optional (at least one required):
 - ` + "`--priority <level>`" + ` - New priority
 - ` + "`--status <status>`" + ` - New status (must be valid transition)
 - ` + "`--parent <task-id>`" + ` - New parent (use 'none' for top-level)
+- ` + "`--add-tag <tag>`" + ` - Add a tag (repeatable)
+- ` + "`--remove-tag <tag>`" + ` - Remove a tag (repeatable)
+- ` + "`--clear-tags`" + ` - Remove all tags
 
 Example:
 ` + "```bash" + `

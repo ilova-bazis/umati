@@ -19,6 +19,7 @@ type formResult struct {
 	status      schema.Status
 	parentID    string
 	assignee    string // empty means no assignee
+	tags        []string
 	files       []string
 	isEdit      bool
 	taskID      string
@@ -33,6 +34,7 @@ const (
 	fieldStatus
 	fieldParent
 	fieldAssignee
+	fieldTags
 	fieldFiles
 	fieldCount
 )
@@ -72,6 +74,7 @@ type FormModel struct {
 	titleInput  textinput.Model
 	descInput   textinput.Model
 	parentInput textinput.Model
+	tagsInput   textinput.Model
 
 	prioritySel enumSel
 	statusSel   enumSel
@@ -106,6 +109,10 @@ func newCreateForm(status schema.Status, allFiles []string) FormModel {
 	pi.Placeholder = "Parent task ID (e.g. UM-5)"
 	pi.CharLimit = 20
 
+	tgi := textinput.New()
+	tgi.Placeholder = "comma-separated (bug, api, backend)"
+	tgi.CharLimit = 200
+
 	// Status selector only offers valid create-time statuses.
 	createStatuses := []string{"draft", "paused", "ready"}
 	statusIdx := 0
@@ -120,6 +127,7 @@ func newCreateForm(status schema.Status, allFiles []string) FormModel {
 		titleInput:  ti,
 		descInput:   di,
 		parentInput: pi,
+		tagsInput:   tgi,
 		prioritySel: enumSel{options: priorityOptions, idx: 1}, // default: medium
 		statusSel:   enumSel{options: createStatuses, idx: statusIdx},
 		assigneeSel: enumSel{options: assigneeOptions, idx: 0},
@@ -158,6 +166,10 @@ func newEditForm(task schema.Task, allFiles []string) FormModel {
 		m.assigneeSel.setTo(string(*task.Assignee))
 	}
 
+	if len(task.Tags) > 0 {
+		m.tagsInput.SetValue(strings.Join(task.Tags, ", "))
+	}
+
 	m.files = task.Files
 
 	// Unfocus title since it already has content
@@ -171,6 +183,7 @@ func (m *FormModel) syncFocus() {
 	m.titleInput.Blur()
 	m.descInput.Blur()
 	m.parentInput.Blur()
+	m.tagsInput.Blur()
 	switch m.focus {
 	case fieldTitle:
 		m.titleInput.Focus()
@@ -178,6 +191,8 @@ func (m *FormModel) syncFocus() {
 		m.descInput.Focus()
 	case fieldParent:
 		m.parentInput.Focus()
+	case fieldTags:
+		m.tagsInput.Focus()
 	}
 }
 
@@ -256,6 +271,9 @@ func (m FormModel) Update(msg tea.Msg) (FormModel, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	case fieldParent:
 		m.parentInput, cmd = m.parentInput.Update(msg)
+		cmds = append(cmds, cmd)
+	case fieldTags:
+		m.tagsInput, cmd = m.tagsInput.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -371,6 +389,7 @@ func (m FormModel) submit() (FormModel, tea.Cmd) {
 		status:      status,
 		parentID:    strings.TrimSpace(m.parentInput.Value()),
 		assignee:    m.assigneeSel.value(),
+		tags:        parseTags(m.tagsInput.Value()),
 		files:       m.files,
 		isEdit:      m.isEdit,
 		taskID:      m.taskID,
@@ -418,6 +437,7 @@ func (m FormModel) View(width, height int) string {
 		{"Status      ", fieldStatus, m.renderEnum(m.statusSel, m.focus == fieldStatus)},
 		{"Parent ID   ", fieldParent, m.parentInput.View()},
 		{"Assignee    ", fieldAssignee, m.renderEnum(m.assigneeSel, m.focus == fieldAssignee)},
+		{"Tags        ", fieldTags, m.tagsInput.View()},
 		{"Files       ", fieldFiles, filesView},
 	}
 
@@ -489,4 +509,15 @@ func (m FormModel) renderEnum(sel enumSel, focused bool) string {
 		return styleCardIDSelected.Render(display)
 	}
 	return styleValueFg.Render(display)
+}
+
+func parseTags(raw string) []string {
+	var tags []string
+	for _, part := range strings.Split(raw, ",") {
+		t := strings.TrimSpace(part)
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return schema.NormalizeTags(tags)
 }

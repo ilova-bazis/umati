@@ -91,6 +91,7 @@ Behavior:
 - returns top-level and nested tasks
 - includes task status, priority, assignee, and title in a compact view
 - excludes deleted tasks
+- supports `--status`, `--priority`, `--agent`, and `--tag` (repeatable, AND matching) filters
 - useful for humans reviewing the whole workspace state
 
 Example:
@@ -166,6 +167,7 @@ Optional arguments:
 - `--priority <low|medium|high|urgent>`
 - `--status <draft|paused|ready|claimed|in_progress|done|cancelled>`
 - `--parent <task-id>`
+- `--tag <tag>` (repeatable)
 - `--agent <actor>`
 
 Recommended defaults:
@@ -179,7 +181,7 @@ Examples:
 ```bash
 umati create --title "Implement auth refactor" --description "Refactor authentication flow to support token refresh."
 umati create --parent UM-12 --title "Update session middleware" --description "Adjust middleware to use refreshed tokens." --priority high --status ready
-umati create --title "Fix CI pipeline" --description "Repair failing checks in GitHub Actions." --priority urgent --agent human
+umati create --title "Fix CI pipeline" --description "Repair failing checks in GitHub Actions." --priority urgent --tag bug --tag ci --agent human
 ```
 
 Example output:
