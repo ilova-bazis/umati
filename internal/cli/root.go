@@ -94,12 +94,14 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "List filtering (works with all, ready, mine):")
 	fmt.Fprintln(os.Stderr, "  --status <status>       Filter by status")
 	fmt.Fprintln(os.Stderr, "  --priority <priority>   Filter by priority")
+	fmt.Fprintln(os.Stderr, "  --kind <kind>           Filter by kind (task|bug|feature|chore|improvement|dastan)")
 	fmt.Fprintln(os.Stderr, "  --agent <agent>         Filter by assignee")
 	fmt.Fprintln(os.Stderr, "  --tag <tag>             Filter by tag (repeatable, AND matching)")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Create options:")
 	fmt.Fprintln(os.Stderr, "  --title <title>         Task title (required)")
 	fmt.Fprintln(os.Stderr, "  --description <text>    Task description")
+	fmt.Fprintln(os.Stderr, "  --kind <kind>           task|bug|feature|chore|improvement|dastan (default: task)")
 	fmt.Fprintln(os.Stderr, "  --priority <level>      low|medium|high|urgent (default: medium)")
 	fmt.Fprintln(os.Stderr, "  --status <status>       draft|paused|ready (default: draft)")
 	fmt.Fprintln(os.Stderr, "  --parent <task-id>      Parent task ID for subtasks")
@@ -111,6 +113,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  --title <title>         New title")
 	fmt.Fprintln(os.Stderr, "  --description <text>    New description")
 	fmt.Fprintln(os.Stderr, "  --priority <level>      New priority")
+	fmt.Fprintln(os.Stderr, "  --kind <kind>           New kind")
 	fmt.Fprintln(os.Stderr, "  --status <status>       New status (with transition validation)")
 	fmt.Fprintln(os.Stderr, "  --parent <task-id>      New parent (or 'none' for top-level)")
 	fmt.Fprintln(os.Stderr, "  --add-tag <tag>         Add a tag (repeatable)")
@@ -130,6 +133,7 @@ func runList(args []string) error {
 	var filters struct {
 		status   *string
 		priority *string
+		kind     *string
 		agent    *string
 		tags     []string
 	}
@@ -148,6 +152,12 @@ func runList(args []string) error {
 				return fmt.Errorf("--priority requires a value")
 			}
 			filters.priority = &args[i]
+		case "--kind":
+			i++
+			if i >= len(args) {
+				return fmt.Errorf("--kind requires a value")
+			}
+			filters.kind = &args[i]
 		case "--agent":
 			i++
 			if i >= len(args) {
@@ -180,6 +190,7 @@ func runList(args []string) error {
 func runListAll(filters struct {
 	status   *string
 	priority *string
+	kind     *string
 	agent    *string
 	tags     []string
 }) error {
@@ -202,6 +213,7 @@ func runListAll(filters struct {
 func runListReady(filters struct {
 	status   *string
 	priority *string
+	kind     *string
 	agent    *string
 	tags     []string
 }) error {
@@ -224,6 +236,7 @@ func runListReady(filters struct {
 func runListMine(filters struct {
 	status   *string
 	priority *string
+	kind     *string
 	agent    *string
 	tags     []string
 }) error {
@@ -269,6 +282,7 @@ func runListMine(filters struct {
 func applyFilters(tasks []schema.Task, filters struct {
 	status   *string
 	priority *string
+	kind     *string
 	agent    *string
 	tags     []string
 }) []schema.Task {
@@ -287,6 +301,17 @@ func applyFilters(tasks []schema.Task, filters struct {
 		// Priority filter
 		if filters.priority != nil {
 			if string(task.Priority) != *filters.priority {
+				continue
+			}
+		}
+
+		// Kind filter
+		if filters.kind != nil {
+			filterKind := schema.KindTask
+			if *filters.kind != "" && *filters.kind != "task" {
+				filterKind = schema.Kind(*filters.kind)
+			}
+			if task.Kind != filterKind {
 				continue
 			}
 		}
@@ -364,6 +389,7 @@ func runCreate(args []string) error {
 	var opts struct {
 		title       string
 		description string
+		kind        string
 		priority    string
 		status      string
 		parent      string
@@ -385,6 +411,12 @@ func runCreate(args []string) error {
 				return fmt.Errorf("--description requires a value")
 			}
 			opts.description = filteredArgs[i]
+		case "--kind":
+			i++
+			if i >= len(filteredArgs) {
+				return fmt.Errorf("--kind requires a value")
+			}
+			opts.kind = filteredArgs[i]
 		case "--priority":
 			i++
 			if i >= len(filteredArgs) {
@@ -434,6 +466,7 @@ func runCreateInteractive() error {
 	opts := struct {
 		title       string
 		description string
+		kind        string
 		priority    string
 		status      string
 		parent      string
@@ -442,6 +475,7 @@ func runCreateInteractive() error {
 	}{
 		title:       result.title,
 		description: result.description,
+		kind:        result.kind,
 		priority:    result.priority,
 		status:      result.status,
 		parent:      result.parent,
@@ -455,6 +489,7 @@ func runCreateInteractive() error {
 func runCreateWithOpts(opts struct {
 	title       string
 	description string
+	kind        string // canonical: `` for KindTask, "bug", "feature", "chore", "improvement", "dastan"
 	priority    string
 	status      string
 	parent      string
@@ -533,12 +568,22 @@ func runCreateWithOpts(opts struct {
 
 		normalizedTags := schema.NormalizeTags(opts.tags)
 
+		// Map the user-facing "task" label back to the canonical empty KindTask.
+		kind := schema.KindTask
+		if opts.kind != "" && opts.kind != "task" {
+			kind = schema.Kind(opts.kind)
+		}
+		if !schema.IsValidKind(kind) {
+			return nil, fmt.Errorf("invalid kind: %s", opts.kind)
+		}
+
 		// Create task
 		task := schema.Task{
 			ID:          newID,
 			Title:       opts.title,
 			Description: opts.description,
 			Priority:    priority,
+			Kind:        kind,
 			Status:      status,
 			Assignee:    nil,
 			ParentID:    parentID,
@@ -1075,6 +1120,7 @@ func runUpdate(args []string) error {
 		title       *string
 		description *string
 		priority    *string
+		kind        *string
 		status      *string
 		parent      *string
 		agent       string
@@ -1103,6 +1149,12 @@ func runUpdate(args []string) error {
 				return fmt.Errorf("--priority requires a value")
 			}
 			opts.priority = &args[i]
+		case "--kind":
+			i++
+			if i >= len(args) {
+				return fmt.Errorf("--kind requires a value")
+			}
+			opts.kind = &args[i]
 		case "--status":
 			i++
 			if i >= len(args) {
@@ -1151,7 +1203,7 @@ func runUpdate(args []string) error {
 
 	// Check if any field is being updated
 	if opts.title == nil && opts.description == nil && opts.priority == nil &&
-		opts.status == nil && opts.parent == nil &&
+		opts.kind == nil && opts.status == nil && opts.parent == nil &&
 		len(opts.addTags) == 0 && len(opts.removeTags) == 0 && !opts.clearTags {
 		return fmt.Errorf("no fields to update")
 	}
@@ -1199,6 +1251,21 @@ func runUpdate(args []string) error {
 			}
 			task.Priority = priority
 			updated = true
+		}
+
+		// Update kind
+		if opts.kind != nil {
+			kind := schema.KindTask
+			if *opts.kind != "" && *opts.kind != "task" {
+				kind = schema.Kind(*opts.kind)
+			}
+			if !schema.IsValidKind(kind) {
+				return nil, fmt.Errorf("invalid kind: %s", *opts.kind)
+			}
+			if task.Kind != kind {
+				task.Kind = kind
+				updated = true
+			}
 		}
 
 		// Update status
@@ -1403,6 +1470,7 @@ List all active tasks hierarchically.
 Filters:
 - ` + "`--status <status>`" + ` - Filter by status
 - ` + "`--priority <priority>`" + ` - Filter by priority
+- ` + "`--kind <kind>`" + ` - Filter by kind (task|bug|feature|chore|improvement|dastan)
 - ` + "`--agent <agent>`" + ` - Filter by assignee
 - ` + "`--tag <tag>`" + ` - Filter by tag (repeatable, AND matching)
 
@@ -1461,6 +1529,7 @@ Required:
 
 Optional:
 - ` + "`--description <text>`" + ` - Task description (required unless status=draft)
+- ` + "`--kind <kind>`" + ` - task|bug|feature|chore|improvement|dastan (default: task)
 - ` + "`--priority <level>`" + ` - low|medium|high|urgent (default: medium)
 - ` + "`--status <status>`" + ` - draft|paused|ready (default: draft)
 - ` + "`--parent <task-id>`" + ` - Parent task for subtasks
@@ -1486,6 +1555,7 @@ Optional (at least one required):
 - ` + "`--title <title>`" + ` - New title
 - ` + "`--description <text>`" + ` - New description
 - ` + "`--priority <level>`" + ` - New priority
+- ` + "`--kind <kind>`" + ` - New kind (task|bug|feature|chore|improvement|dastan)
 - ` + "`--status <status>`" + ` - New status (must be valid transition)
 - ` + "`--parent <task-id>`" + ` - New parent (use 'none' for top-level)
 - ` + "`--add-tag <tag>`" + ` - Add a tag (repeatable)

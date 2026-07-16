@@ -11,6 +11,7 @@ type Task struct {
 	Description string   `json:"description"`
 	Priority    Priority `json:"priority"`
 	Status      Status   `json:"status"`
+	Kind        Kind     `json:"kind,omitempty"`
 	Assignee    *Actor   `json:"assignee"`
 	ParentID    *string  `json:"parent_id"`
 	CreatedAt   string   `json:"created_at"`
@@ -67,6 +68,9 @@ func validateBaseTask(task Task) error {
 	}
 	if !IsValidPriority(task.Priority) {
 		return fmt.Errorf("invalid priority: %q", task.Priority)
+	}
+	if !IsValidKind(task.Kind) {
+		return fmt.Errorf("invalid kind: %q", task.Kind)
 	}
 	if task.Assignee != nil && !IsValidActor(*task.Assignee) {
 		return fmt.Errorf("invalid assignee: %q", *task.Assignee)

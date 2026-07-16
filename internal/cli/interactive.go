@@ -14,6 +14,7 @@ import (
 func interactivePrompt() (*struct {
 	title       string
 	description string
+	kind        string
 	priority    string
 	status      string
 	parent      string
@@ -38,6 +39,14 @@ func interactivePrompt() (*struct {
 	if err != nil {
 		return nil, err
 	}
+
+	// Kind (optional, default: task)
+	kindOptions := []string{"task", "bug", "feature", "chore", "improvement", "dastan"}
+	kindIdx, err := promptSelect(reader, "Kind", kindOptions, 0) // 0 = task
+	if err != nil {
+		return nil, err
+	}
+	kind := kindOptions[kindIdx]
 
 	// Priority (optional, default: medium)
 	priorityOptions := []string{"low", "medium", "high", "urgent"}
@@ -90,6 +99,7 @@ func interactivePrompt() (*struct {
 	result := &struct {
 		title       string
 		description string
+		kind        string
 		priority    string
 		status      string
 		parent      string
@@ -98,6 +108,7 @@ func interactivePrompt() (*struct {
 	}{
 		title:       title,
 		description: description,
+		kind:        kind,
 		priority:    priority,
 		status:      status,
 		parent:      parent,
@@ -198,6 +209,7 @@ func promptSelect(reader *bufio.Reader, label string, options []string, defaultI
 func promptConfirm(reader *bufio.Reader, opts *struct {
 	title       string
 	description string
+	kind        string
 	priority    string
 	status      string
 	parent      string
@@ -214,6 +226,7 @@ func promptConfirm(reader *bufio.Reader, opts *struct {
 	}
 	fmt.Printf("  Description: %s\n", desc)
 
+	fmt.Printf("  Kind:        %s\n", opts.kind)
 	fmt.Printf("  Priority:    %s\n", opts.priority)
 	fmt.Printf("  Status:      %s\n", opts.status)
 

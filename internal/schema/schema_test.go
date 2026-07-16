@@ -124,6 +124,38 @@ func TestValidateTagsAllowsCanonical(t *testing.T) {
 	}
 }
 
+func TestIsValidKind(t *testing.T) {
+	valid := []schema.Kind{
+		schema.KindTask, schema.KindBug, schema.KindFeature,
+		schema.KindChore, schema.KindImprovement, schema.KindDastan,
+	}
+	for _, k := range valid {
+		if !schema.IsValidKind(k) {
+			t.Errorf("IsValidKind(%q) = false, want true", k)
+		}
+	}
+	if schema.IsValidKind("epic") {
+		t.Errorf("IsValidKind(\"epic\") = true, want false")
+	}
+}
+
+func TestValidateActiveTaskRejectsInvalidKind(t *testing.T) {
+	task := validTask()
+	task.Kind = schema.Kind("epic")
+	if err := schema.ValidateActiveTask(task); err == nil {
+		t.Fatal("expected validation error for invalid kind")
+	}
+}
+
+func TestKindDisplay(t *testing.T) {
+	if schema.KindDisplay("") != "task" {
+		t.Errorf("KindDisplay(\"\") = %q, want \"task\"", schema.KindDisplay(""))
+	}
+	if schema.KindDisplay("bug") != "bug" {
+		t.Errorf("KindDisplay(\"bug\") = %q, want \"bug\"", schema.KindDisplay("bug"))
+	}
+}
+
 func TestHasAllTags(t *testing.T) {
 	tests := []struct {
 		name       string

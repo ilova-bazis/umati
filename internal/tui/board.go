@@ -170,7 +170,7 @@ func (m BoardModel) updateBoard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case filterAppliedMsg:
-		m.filter = FilterState{priority: msg.priority, agent: msg.agent, tags: msg.tags}
+		m.filter = FilterState{priority: msg.priority, kind: msg.kind, agent: msg.agent, tags: msg.tags}
 		m.overlay = overlayNone
 		m.rebuildAllColumns()
 		return m, nil
@@ -353,6 +353,9 @@ func (m BoardModel) filteredTasks() []schema.Task {
 			continue
 		}
 		if m.filter.agent != nil && (t.Assignee == nil || *t.Assignee != *m.filter.agent) {
+			continue
+		}
+		if m.filter.kind != nil && t.Kind != *m.filter.kind {
 			continue
 		}
 		if len(m.filter.tags) > 0 && !schema.HasAllTags(t.Tags, m.filter.tags) {

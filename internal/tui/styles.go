@@ -8,11 +8,11 @@ import (
 // System terminal colors (ANSI 0-15) - adapts to user's terminal theme
 const (
 	// Base colors
-	colorBg      = lipgloss.Color("0") // black (terminal background)
-	colorBorder  = lipgloss.Color("8") // bright black
-	colorSelected = lipgloss.Color("4") // blue — used as foreground for borders/headers
-	colorText    = lipgloss.Color("7") // white (terminal foreground)
-	colorDim     = lipgloss.Color("8") // bright black
+	colorBg         = lipgloss.Color("0") // black (terminal background)
+	colorBorder     = lipgloss.Color("8") // bright black
+	colorSelected   = lipgloss.Color("4") // blue — used as foreground for borders/headers
+	colorText       = lipgloss.Color("7") // white (terminal foreground)
+	colorDim        = lipgloss.Color("8") // bright black
 	colorSuccess    = lipgloss.Color("2") // green
 	colorErr        = lipgloss.Color("1") // red
 	colorHeader     = lipgloss.Color("6") // cyan
@@ -31,6 +31,13 @@ const (
 	colorPrioMed    = lipgloss.Color("3") // yellow
 	colorPrioHigh   = lipgloss.Color("1") // red
 	colorPrioUrgent = lipgloss.Color("9") // bright red
+
+	// Kind colors use bright foregrounds so badge text stays readable across themes.
+	colorKindBug         = lipgloss.Color("9")  // bright red
+	colorKindFeature     = lipgloss.Color("10") // bright green
+	colorKindChore       = lipgloss.Color("11") // bright yellow
+	colorKindImprovement = lipgloss.Color("12") // bright blue
+	colorKindDastan      = lipgloss.Color("13") // bright magenta
 
 	// Status colors
 	colorDraft      = lipgloss.Color("8") // bright black (dimmed)
@@ -164,6 +171,57 @@ func priorityAbbr(p schema.Priority) string {
 		return "URG"
 	}
 	return "???"
+}
+
+// kindBadge renders a compact, colored badge for non-default kinds.
+// Returns "" for KindTask (default) so default cards stay clean.
+func kindBadge(k schema.Kind) string {
+	text := kindBadgeText(k)
+	if text == "" {
+		return ""
+	}
+	return kindBadgeStyle(k).Render(text)
+}
+
+func kindBadgeStyle(k schema.Kind) lipgloss.Style {
+	var color lipgloss.Color
+	switch k {
+	case schema.KindBug:
+		color = colorKindBug
+	case schema.KindFeature:
+		color = colorKindFeature
+	case schema.KindChore:
+		color = colorKindChore
+	case schema.KindImprovement:
+		color = colorKindImprovement
+	case schema.KindDastan:
+		color = colorKindDastan
+	}
+	return lipgloss.NewStyle().Foreground(color).Bold(true)
+}
+
+func kindBadgeText(k schema.Kind) string {
+	abbr := kindAbbr(k)
+	if abbr == "" {
+		return ""
+	}
+	return "[" + abbr + "]"
+}
+
+func kindAbbr(k schema.Kind) string {
+	switch k {
+	case schema.KindBug:
+		return "B"
+	case schema.KindFeature:
+		return "F"
+	case schema.KindChore:
+		return "C"
+	case schema.KindImprovement:
+		return "I"
+	case schema.KindDastan:
+		return "D"
+	}
+	return ""
 }
 
 func columnLabel(s schema.Status) string {

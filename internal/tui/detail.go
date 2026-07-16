@@ -28,7 +28,8 @@ func (d DetailModel) View(width int) string {
 
 	// Meta line
 	metaLine := fmt.Sprintf(
-		"Priority: %s  Status: %s  Assignee: %s  Parent: %s  Created by: %s",
+		"Kind: %s  Priority: %s  Status: %s  Assignee: %s  Parent: %s  Created by: %s",
+		styleLabelFg.Render(schema.KindDisplay(t.Kind)),
 		priorityStyle(t.Priority).Render(strings.ToUpper(priorityAbbr(t.Priority))),
 		statusStyle(t.Status).Render(string(t.Status)),
 		styleLabelFg.Render(assigneeDisplay(t.Assignee)),
@@ -204,7 +205,7 @@ func renderCardLine(item CardItem, lineNum int, isSelected bool, width int) stri
 	}
 
 	switch lineNum {
-	case 0: // ID + expander
+	case 0: // ID + expander + optional kind badge
 		var exp string
 		switch {
 		case item.hasKids && item.isExpanded:
@@ -216,12 +217,21 @@ func renderCardLine(item CardItem, lineNum int, isSelected bool, width int) stri
 		default:
 			exp = "  "
 		}
+		badgeText := kindBadgeText(t.Kind)
+		badgeRendered := kindBadge(t.Kind)
 		content := indent + exp + t.ID
+		if badgeText != "" {
+			content += " " + badgeText
+		}
 		if isSelected {
 			return styleCardIDSelected.Render(content +
 				strings.Repeat(" ", max(0, width-len([]rune(content)))))
 		}
-		return styleCardID.Render(indent+exp+t.ID) +
+		header := styleCardID.Render(indent + exp + t.ID)
+		if badgeRendered != "" {
+			header += " " + badgeRendered
+		}
+		return header +
 			strings.Repeat(" ", max(0, width-len([]rune(content))))
 
 	case 1: // Title

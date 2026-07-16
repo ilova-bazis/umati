@@ -91,7 +91,7 @@ Behavior:
 - returns top-level and nested tasks
 - includes task status, priority, assignee, and title in a compact view
 - excludes deleted tasks
-- supports `--status`, `--priority`, `--agent`, and `--tag` (repeatable, AND matching) filters
+- supports `--status`, `--priority`, `--kind`, `--agent`, and `--tag` (repeatable, AND matching) filters
 - useful for humans reviewing the whole workspace state
 
 Example:
@@ -164,6 +164,7 @@ Arguments:
 
 Optional arguments:
 
+- `--kind <task|bug|feature|chore|improvement|dastan>` (default: task)
 - `--priority <low|medium|high|urgent>`
 - `--status <draft|paused|ready|claimed|in_progress|done|cancelled>`
 - `--parent <task-id>`

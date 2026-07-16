@@ -64,6 +64,7 @@ func RenderShow(task schema.Task, allTasks []schema.Task, events []schema.Event)
 	fmt.Printf("%s\n", task.ID)
 	fmt.Printf("Title: %s\n", task.Title)
 	fmt.Printf("Status: %s\n", task.Status)
+	fmt.Printf("Kind: %s\n", schema.KindDisplay(task.Kind))
 	fmt.Printf("Priority: %s\n", task.Priority)
 	fmt.Printf("Assignee: %s\n", formatAssignee(task.Assignee))
 	fmt.Printf("Parent: %s\n", formatParent(task.ParentID))
@@ -98,12 +99,16 @@ func RenderShow(task schema.Task, allTasks []schema.Task, events []schema.Event)
 func renderTaskRow(task schema.Task, depth int) {
 	indent := strings.Repeat("  ", depth)
 	assignee := formatAssignee(task.Assignee)
+	kindPrefix := ""
+	if task.Kind != "" && task.Kind != schema.KindTask {
+		kindPrefix = "[" + string(task.Kind) + "] "
+	}
 	tagStr := ""
 	if len(task.Tags) > 0 {
 		tagStr = " [" + strings.Join(task.Tags, "] [") + "]"
 	}
-	fmt.Fprintf(os.Stderr, "%s%s  %-6s  %-12s  %-8s  %s%s\n",
-		indent, task.ID, task.Priority, task.Status, assignee, task.Title, tagStr)
+	fmt.Fprintf(os.Stderr, "%s%s  %-6s  %-12s  %-8s  %s%s%s\n",
+		indent, task.ID, task.Priority, task.Status, assignee, kindPrefix, task.Title, tagStr)
 }
 
 func renderChildren(tasks []schema.Task, childrenMap map[string][]string, parentID string, depth int) {

@@ -15,6 +15,7 @@ import (
 type formResult struct {
 	title       string
 	description string
+	kind        schema.Kind
 	priority    schema.Priority
 	status      schema.Status
 	parentID    string
@@ -30,6 +31,7 @@ type formField int
 const (
 	fieldTitle formField = iota
 	fieldDescription
+	fieldKind
 	fieldPriority
 	fieldStatus
 	fieldParent
@@ -77,6 +79,7 @@ type FormModel struct {
 	tagsInput   textinput.Model
 
 	prioritySel enumSel
+	kindSel     enumSel
 	statusSel   enumSel
 	assigneeSel enumSel
 
@@ -94,6 +97,7 @@ type FormModel struct {
 
 var priorityOptions = []string{"low", "medium", "high", "urgent"}
 var assigneeOptions = []string{"", "human", "claude", "opencode", "codex"}
+var kindOptions = []string{"task", "bug", "feature", "chore", "improvement", "dastan"}
 
 func newCreateForm(status schema.Status, allFiles []string) FormModel {
 	ti := textinput.New()
@@ -129,6 +133,7 @@ func newCreateForm(status schema.Status, allFiles []string) FormModel {
 		parentInput: pi,
 		tagsInput:   tgi,
 		prioritySel: enumSel{options: priorityOptions, idx: 1}, // default: medium
+		kindSel:     enumSel{options: kindOptions, idx: 0},      // default: task
 		statusSel:   enumSel{options: createStatuses, idx: statusIdx},
 		assigneeSel: enumSel{options: assigneeOptions, idx: 0},
 		focus:       fieldTitle,
@@ -147,6 +152,10 @@ func newEditForm(task schema.Task, allFiles []string) FormModel {
 		m.parentInput.SetValue(*task.ParentID)
 	}
 	m.prioritySel.setTo(string(task.Priority))
+
+	// Kind selector maps the default KindTask ("") to the visible "task" label.
+	m.kindSel = enumSel{options: kindOptions}
+	m.kindSel.setTo(schema.KindDisplay(task.Kind))
 
 	// Status options: current + all valid transitions
 	statusOpts := []string{string(task.Status)}
@@ -244,13 +253,13 @@ func (m FormModel) Update(msg tea.Msg) (FormModel, tea.Cmd) {
 			}
 
 		case msg.String() == "left":
-			if m.focus == fieldPriority || m.focus == fieldStatus || m.focus == fieldAssignee {
+			if m.focus == fieldPriority || m.focus == fieldKind || m.focus == fieldStatus || m.focus == fieldAssignee {
 				m.cycleEnum(false)
 				return m, nil
 			}
 
 		case msg.String() == "right":
-			if m.focus == fieldPriority || m.focus == fieldStatus || m.focus == fieldAssignee {
+			if m.focus == fieldPriority || m.focus == fieldKind || m.focus == fieldStatus || m.focus == fieldAssignee {
 				m.cycleEnum(true)
 				return m, nil
 			}
@@ -348,6 +357,12 @@ func (m *FormModel) cycleEnum(forward bool) {
 		} else {
 			m.prioritySel.prev()
 		}
+	case fieldKind:
+		if forward {
+			m.kindSel.next()
+		} else {
+			m.kindSel.prev()
+		}
 	case fieldStatus:
 		if forward {
 			m.statusSel.next()
@@ -385,6 +400,7 @@ func (m FormModel) submit() (FormModel, tea.Cmd) {
 	r := formResult{
 		title:       title,
 		description: strings.TrimSpace(m.descInput.Value()),
+		kind:        kindFromSel(m.kindSel.value()),
 		priority:    schema.Priority(m.prioritySel.value()),
 		status:      status,
 		parentID:    strings.TrimSpace(m.parentInput.Value()),
@@ -433,6 +449,7 @@ func (m FormModel) View(width, height int) string {
 	}{
 		{"Title       ", fieldTitle, m.titleInput.View()},
 		{"Description ", fieldDescription, m.descInput.View()},
+		{"Kind        ", fieldKind, m.renderEnum(m.kindSel, m.focus == fieldKind)},
 		{"Priority    ", fieldPriority, m.renderEnum(m.prioritySel, m.focus == fieldPriority)},
 		{"Status      ", fieldStatus, m.renderEnum(m.statusSel, m.focus == fieldStatus)},
 		{"Parent ID   ", fieldParent, m.parentInput.View()},
@@ -520,4 +537,13 @@ func parseTags(raw string) []string {
 		}
 	}
 	return schema.NormalizeTags(tags)
+}
+
+// kindFromSel converts the selector label back to the canonical Kind value.
+// The visible "task" label maps to the empty KindTask default.
+func kindFromSel(v string) schema.Kind {
+	if v == "task" {
+		return schema.KindTask
+	}
+	return schema.Kind(v)
 }

@@ -310,6 +310,7 @@ func createTaskCmd(ctx workspace.Context, agent schema.Actor, r formResult) tea.
 				Title:       r.title,
 				Description: r.description,
 				Priority:    r.priority,
+				Kind:        r.kind,
 				Status:      r.status,
 				Assignee:    assignee,
 				ParentID:    parentID,
@@ -353,6 +354,10 @@ func updateTaskCmd(ctx workspace.Context, agent schema.Actor, taskID string, r f
 			}
 			if r.priority != task.Priority {
 				task.Priority = r.priority
+				updated = true
+			}
+			if r.kind != task.Kind {
+				task.Kind = r.kind
 				updated = true
 			}
 			if r.status != task.Status {

@@ -107,6 +107,7 @@ Example active task:
   "description": "Refactor authentication flow to support token refresh.",
   "priority": "high",
   "status": "ready",
+  "kind": "bug",
   "assignee": null,
   "parent_id": null,
   "tags": [],
@@ -138,6 +139,7 @@ Example active task:
 - `description`: task details; may be empty only when status is `draft`
 - `priority`: one of `low`, `medium`, `high`, `urgent`
 - `status`: one of `draft`, `paused`, `ready`, `claimed`, `in_progress`, `done`, `cancelled`
+- `kind`: optional classification — one of `task` (default), `bug`, `feature`, `chore`, `improvement`, `dastan`. Omitted from JSON when `task`.
 - `assignee`: one of `opencode`, `codex`, `claude`, `human`, or `null`
 - `parent_id`: parent task ID or `null` for top-level tasks
 - `created_at`: ISO 8601 UTC timestamp

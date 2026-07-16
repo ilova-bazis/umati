@@ -105,13 +105,16 @@ List all active tasks hierarchically.
 Filters:
 - `--status <status>` - Filter by status
 - `--priority <priority>` - Filter by priority
+- `--kind <kind>` - Filter by kind (task|bug|feature|chore|improvement|dastan)
 - `--agent <agent>` - Filter by assignee
+- `--tag <tag>` - Filter by tag (repeatable, AND matching)
 
 Example:
 ```bash
 umati list all
 umati list all --status ready
 umati list all --priority high --agent human
+umati list all --kind bug --tag api
 ```
 
 #### `umati list ready [filters]`
@@ -162,14 +165,19 @@ Required:
 
 Optional:
 - `--description <text>` - Task description (required unless status=draft)
+- `--kind <kind>` - task|bug|feature|chore|improvement|dastan (default: task)
 - `--priority <level>` - low|medium|high|urgent (default: medium)
 - `--status <status>` - draft|paused|ready (default: draft)
 - `--parent <task-id>` - Parent task for subtasks
+- `--tag <tag>` - Tag to attach (repeatable)
+- `-i, --interactive` - Interactive mode (prompts for fields)
 
 Example:
 ```bash
 umati create --title "Fix bug" --description "Fix the login bug" --priority high --status ready --agent human
 umati create --title "Subtask" --description "Part of the work" --parent UM-12 --agent human
+umati create --title "API issue" --description "..." --kind bug --tag api --agent human
+umati create -i  # Interactive mode
 ```
 
 #### `umati update <task-id> [options]`
@@ -183,8 +191,12 @@ Optional (at least one required):
 - `--title <title>` - New title
 - `--description <text>` - New description
 - `--priority <level>` - New priority
+- `--kind <kind>` - New kind (task|bug|feature|chore|improvement|dastan)
 - `--status <status>` - New status (must be valid transition)
 - `--parent <task-id>` - New parent (use 'none' for top-level)
+- `--add-tag <tag>` - Add a tag (repeatable)
+- `--remove-tag <tag>` - Remove a tag (repeatable)
+- `--clear-tags` - Remove all tags
 
 Example:
 ```bash
