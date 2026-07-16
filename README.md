@@ -234,4 +234,4 @@ Contributions welcome! Please ensure:
 
 ## License
 
-MIT (placeholder - update with actual license)
+This project is licensed under the [MIT License](LICENSE).
