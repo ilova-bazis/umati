@@ -100,7 +100,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Create options:")
 	fmt.Fprintln(os.Stderr, "  --title <title>         Task title (required)")
-	fmt.Fprintln(os.Stderr, "  --description <text>    Task description")
+	fmt.Fprintln(os.Stderr, "  --description <text>    Task description (max 10000 characters)")
 	fmt.Fprintln(os.Stderr, "  --kind <kind>           task|bug|feature|chore|improvement|dastan (default: task)")
 	fmt.Fprintln(os.Stderr, "  --priority <level>      low|medium|high|urgent (default: medium)")
 	fmt.Fprintln(os.Stderr, "  --status <status>       draft|paused|ready (default: draft)")
@@ -111,7 +111,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Update options:")
 	fmt.Fprintln(os.Stderr, "  --title <title>         New title")
-	fmt.Fprintln(os.Stderr, "  --description <text>    New description")
+	fmt.Fprintln(os.Stderr, "  --description <text>    New description (max 10000 characters)")
 	fmt.Fprintln(os.Stderr, "  --priority <level>      New priority")
 	fmt.Fprintln(os.Stderr, "  --kind <kind>           New kind")
 	fmt.Fprintln(os.Stderr, "  --status <status>       New status (with transition validation)")
@@ -503,6 +503,9 @@ func runCreateWithOpts(opts struct {
 	if opts.agent == "" {
 		return fmt.Errorf("--agent is required")
 	}
+	if err := schema.ValidateDescriptionInput(opts.description); err != nil {
+		return err
+	}
 
 	// Validate agent
 	actor := schema.Actor(opts.agent)
@@ -622,9 +625,6 @@ func runClaim(args []string) error {
 	return runStatusChange(args, "claim", schema.StatusClaimed, func(task schema.Task) error {
 		if task.Status != schema.StatusReady {
 			return fmt.Errorf("task is not ready (status: %s)", task.Status)
-		}
-		if task.Assignee != nil {
-			return fmt.Errorf("task is already claimed by %s", *task.Assignee)
 		}
 		return nil
 	})
@@ -1200,6 +1200,11 @@ func runUpdate(args []string) error {
 	if !schema.IsValidActor(actor) {
 		return fmt.Errorf("invalid agent: %s", opts.agent)
 	}
+	if opts.description != nil {
+		if err := schema.ValidateDescriptionInput(*opts.description); err != nil {
+			return err
+		}
+	}
 
 	// Check if any field is being updated
 	if opts.title == nil && opts.description == nil && opts.priority == nil &&
@@ -1528,7 +1533,7 @@ Required:
 - ` + "`--agent <agent>`" + ` - Your agent identifier
 
 Optional:
-- ` + "`--description <text>`" + ` - Task description (required unless status=draft)
+- ` + "`--description <text>`" + ` - Task description (required unless status=draft; max 10000 characters)
 - ` + "`--kind <kind>`" + ` - task|bug|feature|chore|improvement|dastan (default: task)
 - ` + "`--priority <level>`" + ` - low|medium|high|urgent (default: medium)
 - ` + "`--status <status>`" + ` - draft|paused|ready (default: draft)
@@ -1553,7 +1558,7 @@ Required:
 
 Optional (at least one required):
 - ` + "`--title <title>`" + ` - New title
-- ` + "`--description <text>`" + ` - New description
+- ` + "`--description <text>`" + ` - New description (max 10000 characters)
 - ` + "`--priority <level>`" + ` - New priority
 - ` + "`--kind <kind>`" + ` - New kind (task|bug|feature|chore|improvement|dastan)
 - ` + "`--status <status>`" + ` - New status (must be valid transition)
@@ -1576,7 +1581,6 @@ Claim a ready task exclusively.
 
 Requirements:
 - Task must be ` + "`ready`" + `
-- Task must have no assignee
 
 Example:
 ` + "```bash" + `

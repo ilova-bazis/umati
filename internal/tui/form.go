@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ilova-bazis/umati/internal/domain"
@@ -70,11 +71,13 @@ func (e *enumSel) setTo(v string) {
 
 // FormModel is the create/edit task form overlay.
 type FormModel struct {
-	isEdit bool
-	taskID string
+	isEdit                  bool
+	taskID                  string
+	originalDescription     string
+	initialDescriptionValue string
 
 	titleInput  textinput.Model
-	descInput   textinput.Model
+	descInput   textarea.Model
 	parentInput textinput.Model
 	tagsInput   textinput.Model
 
@@ -105,9 +108,12 @@ func newCreateForm(status schema.Status, allFiles []string) FormModel {
 	ti.Focus()
 	ti.CharLimit = 200
 
-	di := textinput.New()
+	di := textarea.New()
 	di.Placeholder = "Description"
-	di.CharLimit = 500
+	di.Prompt = ""
+	di.ShowLineNumbers = false
+	di.SetHeight(5)
+	di.SetWidth(56)
 
 	pi := textinput.New()
 	pi.Placeholder = "Parent task ID (e.g. UM-5)"
@@ -133,7 +139,7 @@ func newCreateForm(status schema.Status, allFiles []string) FormModel {
 		parentInput: pi,
 		tagsInput:   tgi,
 		prioritySel: enumSel{options: priorityOptions, idx: 1}, // default: medium
-		kindSel:     enumSel{options: kindOptions, idx: 0},      // default: task
+		kindSel:     enumSel{options: kindOptions, idx: 0},     // default: task
 		statusSel:   enumSel{options: createStatuses, idx: statusIdx},
 		assigneeSel: enumSel{options: assigneeOptions, idx: 0},
 		focus:       fieldTitle,
@@ -148,6 +154,8 @@ func newEditForm(task schema.Task, allFiles []string) FormModel {
 
 	m.titleInput.SetValue(task.Title)
 	m.descInput.SetValue(task.Description)
+	m.originalDescription = task.Description
+	m.initialDescriptionValue = m.descInput.Value()
 	if task.ParentID != nil {
 		m.parentInput.SetValue(*task.ParentID)
 	}
@@ -222,17 +230,30 @@ func (m FormModel) Update(msg tea.Msg) (FormModel, tea.Cmd) {
 		case key.Matches(msg, keys.Escape):
 			return m, func() tea.Msg { return formCancelledMsg{} }
 
-		case key.Matches(msg, keys.Tab), msg.String() == "down":
+		case key.Matches(msg, keys.Tab):
 			m.focus = (m.focus + 1) % fieldCount
 			m.syncFocus()
 			return m, nil
 
-		case msg.String() == "shift+tab", msg.String() == "up":
+		case msg.String() == "shift+tab":
+			m.focus = formField((int(m.focus) - 1 + int(fieldCount)) % int(fieldCount))
+			m.syncFocus()
+			return m, nil
+
+		case msg.String() == "down" && m.focus != fieldDescription:
+			m.focus = (m.focus + 1) % fieldCount
+			m.syncFocus()
+			return m, nil
+
+		case msg.String() == "up" && m.focus != fieldDescription:
 			m.focus = formField((int(m.focus) - 1 + int(fieldCount)) % int(fieldCount))
 			m.syncFocus()
 			return m, nil
 
 		case key.Matches(msg, keys.Enter):
+			if m.focus == fieldDescription {
+				break
+			}
 			if m.focus == fieldFiles {
 				// Open file picker.
 				m.showFilePicker = true
@@ -397,9 +418,20 @@ func (m FormModel) submit() (FormModel, tea.Cmd) {
 		_ = domain.CanTransition // imported but not called here — the server-side op validates
 	}
 
+	descriptionValue := m.descInput.Value()
+	descriptionChanged := !m.isEdit || descriptionValue != m.initialDescriptionValue
+	description := m.originalDescription
+	if descriptionChanged {
+		description = strings.TrimSpace(descriptionValue)
+		if err := schema.ValidateDescriptionInput(description); err != nil {
+			m.errMsg = err.Error()
+			return m, nil
+		}
+	}
+
 	r := formResult{
 		title:       title,
-		description: strings.TrimSpace(m.descInput.Value()),
+		description: description,
 		kind:        kindFromSel(m.kindSel.value()),
 		priority:    schema.Priority(m.prioritySel.value()),
 		status:      status,
@@ -417,6 +449,12 @@ func (m FormModel) View(width, height int) string {
 	overlayWidth := 64
 	if width < overlayWidth+4 {
 		overlayWidth = width - 4
+	}
+	m.descInput.SetWidth(max(20, overlayWidth-4))
+	if height > 0 && height < 24 {
+		m.descInput.SetHeight(3)
+	} else {
+		m.descInput.SetHeight(5)
 	}
 
 	mode := "New Task"
@@ -462,6 +500,12 @@ func (m FormModel) View(width, height int) string {
 		label := styleLabelFg.Render(f.label + ": ")
 		if m.focus == f.field {
 			label = styleFocusedLabel.Render(f.label + ": ")
+		}
+		if f.field == fieldDescription {
+			count := m.descInput.Length()
+			counter := fmt.Sprintf("%d/%d", count, schema.MaxDescriptionInputLength)
+			sb.WriteString(label + styleCardDim.Render(counter) + "\n" + f.view + "\n")
+			continue
 		}
 		sb.WriteString(label + f.view + "\n")
 	}

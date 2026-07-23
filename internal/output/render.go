@@ -100,6 +100,7 @@ func renderTaskRow(task schema.Task, depth int) {
 	indent := strings.Repeat("  ", depth)
 	assignee := formatAssignee(task.Assignee)
 	kindPrefix := ""
+	// Check both: KindTask is "" today but may become an explicit "task" value later.
 	if task.Kind != "" && task.Kind != schema.KindTask {
 		kindPrefix = "[" + string(task.Kind) + "] "
 	}

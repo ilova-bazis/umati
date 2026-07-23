@@ -1,6 +1,7 @@
 package schema_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ilova-bazis/umati/internal/schema"
@@ -19,6 +20,26 @@ func TestValidateActiveTaskRejectsEmptyDescriptionOnNonDraft(t *testing.T) {
 	task.Status = schema.StatusReady
 	if err := schema.ValidateActiveTask(task); err == nil {
 		t.Fatal("ValidateActiveTask() expected error for empty non-draft description")
+	}
+}
+
+func TestValidateDescriptionInput(t *testing.T) {
+	if err := schema.ValidateDescriptionInput(strings.Repeat("a", schema.MaxDescriptionInputLength)); err != nil {
+		t.Fatalf("ValidateDescriptionInput() at limit error = %v", err)
+	}
+	if err := schema.ValidateDescriptionInput(strings.Repeat("a", schema.MaxDescriptionInputLength+1)); err == nil {
+		t.Fatal("ValidateDescriptionInput() expected error above limit")
+	}
+	if err := schema.ValidateDescriptionInput(strings.Repeat("界", schema.MaxDescriptionInputLength)); err != nil {
+		t.Fatalf("ValidateDescriptionInput() should count Unicode characters, error = %v", err)
+	}
+}
+
+func TestValidateActiveTaskAllowsDescriptionAboveInputLimit(t *testing.T) {
+	task := validTask()
+	task.Description = strings.Repeat("a", schema.MaxDescriptionInputLength+1)
+	if err := schema.ValidateActiveTask(task); err != nil {
+		t.Fatalf("ValidateActiveTask() should allow existing long descriptions, error = %v", err)
 	}
 }
 

@@ -164,7 +164,7 @@ Required:
 - `--agent <agent>` - Your agent identifier
 
 Optional:
-- `--description <text>` - Task description (required unless status=draft)
+- `--description <text>` - Task description (required unless status=draft; max 10000 characters)
 - `--kind <kind>` - task|bug|feature|chore|improvement|dastan (default: task)
 - `--priority <level>` - low|medium|high|urgent (default: medium)
 - `--status <status>` - draft|paused|ready (default: draft)
@@ -189,7 +189,7 @@ Required:
 
 Optional (at least one required):
 - `--title <title>` - New title
-- `--description <text>` - New description
+- `--description <text>` - New description (max 10000 characters)
 - `--priority <level>` - New priority
 - `--kind <kind>` - New kind (task|bug|feature|chore|improvement|dastan)
 - `--status <status>` - New status (must be valid transition)
@@ -212,7 +212,6 @@ Claim a ready task exclusively.
 
 Requirements:
 - Task must be `ready`
-- Task must have no assignee
 
 Example:
 ```bash

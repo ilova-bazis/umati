@@ -83,9 +83,6 @@ func claimTaskCmd(ctx workspace.Context, taskID string, agent schema.Actor) tea.
 			if task.Status != schema.StatusReady {
 				return nil, fmt.Errorf("task is not ready (status: %s)", task.Status)
 			}
-			if task.Assignee != nil {
-				return nil, fmt.Errorf("task is already claimed by %s", *task.Assignee)
-			}
 			now := schema.NowTimestamp()
 			task.Status = schema.StatusClaimed
 			task.Assignee = &agent

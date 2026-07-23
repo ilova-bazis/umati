@@ -3,7 +3,10 @@ package schema
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
+
+const MaxDescriptionInputLength = 10_000
 
 type Task struct {
 	ID          string   `json:"id"`
@@ -131,6 +134,15 @@ func NormalizeTags(tags []string) []string {
 		out = append(out, lower)
 	}
 	return out
+}
+
+// ValidateDescriptionInput limits new or changed descriptions without making
+// existing persisted descriptions invalid.
+func ValidateDescriptionInput(description string) error {
+	if utf8.RuneCountInString(description) > MaxDescriptionInputLength {
+		return fmt.Errorf("description exceeds %d characters", MaxDescriptionInputLength)
+	}
+	return nil
 }
 
 func HasAllTags(taskTags, filterTags []string) bool {
